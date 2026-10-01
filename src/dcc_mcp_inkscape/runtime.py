@@ -173,6 +173,14 @@ def verify_windows_birth_observation(evidence, observation):
     verify_windows_observation(evidence, observation)
 
 
+def _parse_svg(source):
+    """Keep malformed document errors inside the structured skill contract."""
+    try:
+        return ElementTree.parse(source)
+    except ElementTree.ParseError as exc:
+        raise ValueError("SVG document is not well-formed XML") from exc
+
+
 def vector_preflight(source):
     """Reject executable objects and external resources before native reopening."""
     if source.stat().st_size > 30000000:
@@ -186,7 +194,7 @@ def vector_preflight(source):
         raise ValueError("NUL bytes and alternate XML encodings are not accepted")
     if b"<!doctype" in raw.lower() or b"<?xml-stylesheet" in raw.lower():
         raise ValueError("DTD and stylesheet processing instructions are not accepted")
-    tree = ElementTree.parse(source)
+    tree = _parse_svg(source)
     if tree.getroot().tag != "{http://www.w3.org/2000/svg}svg":
         raise ValueError("Input must be an SVG document")
     for element in tree.iter():
@@ -499,7 +507,7 @@ class InkscapeRuntime:
             format == "svg"
             and text_to_path
             and temporary.is_file()
-            and any(element.tag.rsplit("}", 1)[-1] == "text" for element in ElementTree.parse(temporary).iter())
+            and any(element.tag.rsplit("}", 1)[-1] == "text" for element in _parse_svg(temporary).iter())
         ):
             raise RuntimeError("Inkscape did not convert every text object to paths")
         return self._commit(temporary, output, invocation)
@@ -510,7 +518,7 @@ class InkscapeRuntime:
         vector_preflight(source)
         invocation = self._run([str(source), "--query-all"])
         counts = {}
-        for element in ElementTree.parse(source).iter():
+        for element in _parse_svg(source).iter():
             name = element.tag.rsplit("}", 1)[-1]
             counts[name] = counts.get(name, 0) + 1
         return {

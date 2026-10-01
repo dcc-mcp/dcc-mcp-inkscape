@@ -8,6 +8,7 @@ Synthetic SVG documents are test fixtures, never production artefacts.
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import os
 import struct
@@ -717,6 +718,30 @@ def test_public_numeric_font_weight_matches_native_plan_validation(vector_plan, 
     assert public_plan["nodes"][-1]["font_weight"] == weight
 
 
+@pytest.mark.parametrize("weight", ["normal", "bold"] + [str(value) for value in range(100, 901, 100)])
+def test_public_string_font_weights_match_native_validator(vector_plan, weight):
+    vector_plan["nodes"][-1]["font_weight"] = weight
+    public_plan = {"canvas": {"width": 64, "height": 64}, "nodes": vector_plan["nodes"]}
+    ok, errors = _public_validator("document_build").validate(
+        json.dumps({"output_file": "mark.svg", "plan": public_plan})
+    )
+    assert ok, errors
+    assert plan_module.validate_plan(public_plan)["nodes"][-1]["font_weight"] == weight
+
+
+@pytest.mark.parametrize("weight", [True, False, 0, 99, 150, 800.5, 1000, "150", "800.0", "bolder", "bold;fill:red"])
+def test_public_font_weight_rejects_values_the_native_validator_cannot_use(vector_plan, weight):
+    vector_plan["nodes"][-1]["font_weight"] = weight
+    public_plan = {"canvas": {"width": 64, "height": 64}, "nodes": vector_plan["nodes"]}
+    ok, errors = _public_validator("document_build").validate(
+        json.dumps({"output_file": "mark.svg", "plan": public_plan})
+    )
+    assert not ok
+    assert errors
+    with pytest.raises(ValueError):
+        plan_module.validate_plan(public_plan)
+
+
 @pytest.mark.parametrize("location", ["arguments", "plan", "node"])
 def test_public_core_schema_rejects_untyped_actions(vector_plan, location):
     arguments = {
@@ -757,6 +782,103 @@ def _synthetic_document(tmp_path, content, encoding="utf-8"):
     document = tmp_path / "synthetic-test-document.svg"
     document.write_bytes(content if isinstance(content, bytes) else content.encode(encoding))
     return document
+
+
+@pytest.fixture(params=[b'<svg xmlns="http://www.w3.org/2000/svg">', b'<?xml version="1.0" encoding="UTF-16"?><svg/>'])
+def malformed_svg_bytes(request):
+    return request.param
+
+
+def test_malformed_svg_is_an_invalid_document_with_the_original_parse_cause(tmp_path, malformed_svg_bytes):
+    source = _synthetic_document(tmp_path, malformed_svg_bytes)
+    with pytest.raises(ValueError, match="well-formed XML") as failure:
+        runtime_module.vector_preflight(source)
+    assert isinstance(failure.value.__cause__, ElementTree.ParseError)
+
+
+@pytest.mark.parametrize("operation", ["document_export", "document_inspect", "document_open"])
+def test_malformed_svg_is_rejected_before_native_execution(runtime, monkeypatch, malformed_svg_bytes, operation):
+    source = _synthetic_document(runtime.workspace, malformed_svg_bytes)
+    run = Mock(side_effect=AssertionError("Malformed XML must not reach Inkscape"))
+    popen = Mock(side_effect=AssertionError("Malformed XML must not open a GUI"))
+    monkeypatch.setattr(runtime, "_run", run)
+    monkeypatch.setattr(runtime_module.subprocess, "Popen", popen)
+    arguments = [str(source), "malformed-output.png"] if operation == "document_export" else [str(source)]
+    with pytest.raises(ValueError, match="well-formed XML"):
+        getattr(runtime, operation)(*arguments)
+    run.assert_not_called()
+    popen.assert_not_called()
+    assert not (runtime.workspace / "malformed-output.png").exists()
+
+
+@pytest.mark.parametrize("operation", ["document_export", "document_inspect", "document_open"])
+def test_malformed_svg_preserves_the_tool_specific_structured_error(
+    runtime, monkeypatch, malformed_svg_bytes, operation
+):
+    source = _synthetic_document(runtime.workspace, malformed_svg_bytes)
+    spec = importlib.util.spec_from_file_location(
+        "malformed_" + operation, EXAMPLE / "skills/inkscape-vector/scripts" / (operation + ".py")
+    )
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    monkeypatch.setattr(script, "configured_runtime", lambda: runtime)
+    run = Mock(side_effect=AssertionError("Malformed XML must not execute native software"))
+    monkeypatch.setattr(runtime, "_run", run)
+    arguments = {"source_file": str(source)}
+    if operation == "document_export":
+        arguments["output_file"] = "malformed-output.png"
+    result = script.main(**arguments)
+    assert result["success"] is False
+    assert result["error"] == "inkscape_" + operation[len("document_") :] + "_failed"
+    assert result["message"] == "SVG document is not well-formed XML"
+    run.assert_not_called()
+
+
+def test_malformed_native_build_output_is_not_published(runtime, monkeypatch, vector_plan, malformed_svg_bytes):
+    def simulated_host(arguments, environment=None, timeout=120, host_report=None, native_provenance=False):
+        request_path = Path(environment["DCC_MCP_INKSCAPE_REQUEST"])
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+        evidence = {
+            "nonce": request["nonce"],
+            "self_call": "true",
+            "parent_pid": 4321,
+            "extension_pid": 4322,
+            "parent_executable": str(runtime.executable),
+            "object_count": len(vector_plan["nodes"]),
+        }
+        Path(request["evidence_path"]).write_text(json.dumps(evidence), encoding="utf-8")
+        (request_path.parent / "result.svg").write_bytes(malformed_svg_bytes)
+        return {"host_pid": 4321}
+
+    monkeypatch.setattr(runtime, "_run", simulated_host)
+    publish = Mock(side_effect=AssertionError("Malformed native output must not be published"))
+    monkeypatch.setattr(runtime, "_commit", publish)
+    with pytest.raises(ValueError, match="well-formed XML"):
+        runtime.document_build("malformed-build.svg", vector_plan)
+    publish.assert_not_called()
+    assert not (runtime.workspace / "malformed-build.svg").exists()
+
+
+def test_malformed_native_text_conversion_output_is_not_published(
+    runtime, monkeypatch, synthetic_native_svg, malformed_svg_bytes
+):
+    source = _synthetic_document(runtime.workspace, synthetic_native_svg)
+
+    def simulated_host(arguments, **kwargs):
+        actions = next(argument[len("--actions=") :] for argument in arguments if argument.startswith("--actions="))
+        filename = next(
+            action[len("export-filename:") :] for action in actions.split(";") if action.startswith("export-filename:")
+        )
+        Path(filename).write_bytes(malformed_svg_bytes)
+        return {"host_pid": 4321}
+
+    monkeypatch.setattr(runtime, "_run", simulated_host)
+    publish = Mock(side_effect=AssertionError("Malformed converted SVG must not be published"))
+    monkeypatch.setattr(runtime, "_commit", publish)
+    with pytest.raises(ValueError, match="well-formed XML"):
+        runtime.document_export(str(source), "malformed-converted.svg", format="svg", text_to_path=True)
+    publish.assert_not_called()
+    assert not (runtime.workspace / "malformed-converted.svg").exists()
 
 
 @pytest.mark.parametrize("encoding", ["utf-8", "utf-8-sig"])

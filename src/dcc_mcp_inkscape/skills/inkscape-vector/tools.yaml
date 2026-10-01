@@ -145,7 +145,8 @@
                       "type": "number"
                     },
                     "font_weight": {
-                      "type": "number"
+                      "type": ["number", "string"],
+                      "enum": [100, 200, 300, 400, 500, 600, 700, 800, 900, "normal", "bold", "100", "200", "300", "400", "500", "600", "700", "800", "900"]
                     },
                     "id": {
                       "type": "string",
