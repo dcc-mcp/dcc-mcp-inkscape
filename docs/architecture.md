@@ -44,11 +44,27 @@ and native effect process identity. Linux requires a direct Inkscape parent.
 Windows x64 accepts only the bundled Python -> bundled GLib helper -> owned
 Inkscape chain with exact native image directories, matching PIDs, and ordered
 creation/exit times. The ancestor image and creation time must match the
-controller's independently queried owned host. Read-only helper handles can
-retain short-lived process objects. Captured controller observations must
-cross-match; a missed snapshot is disclosed and does not waive the full chain.
+controller's independently queried owned host. Windows builds create only
+their fresh native process tree with `DEBUG_PROCESS`. The thread that creates
+it also pumps `WaitForDebugEvent`/`ContinueDebugEvent`; process-birth events
+pause the new process while a query-only, noninheritable handle and its native
+identity are retained. This covers helpers that exit before Python starts.
+All three birth identities and the helper's final lifetime must cross-match
+the unchanged complete effect-reported chain. No existing process is attached,
+no privileges are adjusted, and process memory/context is never read or changed.
+Initial first-chance loader breakpoints are continued; other exceptions remain
+unhandled for normal application handling. Owned handles are released after
+the created tree exits. Collection is bounded, and Windows' default debugger
+thread exit policy contains only that fresh tree on collection failure.
 An unreadable/unknown chain is rejected. These are local provenance checks,
 not cryptographic host attestation.
+
+The native-event contract follows Microsoft's
+[debugging events](https://learn.microsoft.com/en-us/windows/win32/debug/debugging-events),
+[WaitForDebugEvent](https://learn.microsoft.com/en-us/windows/win32/api/debugapi/nf-debugapi-waitfordebugevent),
+and [debugger thread exit](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-debugsetprocesskillonexit)
+documentation. Snapshot polling and job completion messages do not replace
+the required retained birth objects.
 
 Before publication, the software's saved SVG must contain the requested native
 IDs, namespaces, layer semantics, parent hierarchy, gradient definitions, and
