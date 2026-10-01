@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+        python: ['3.7', '3.9', '3.12']
+    runs-on: ${{ matrix.os }}
+    env:
+      DCC_MCP_DISABLE_DEFAULT_SKILL_PATHS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m pytest -q -m 'not dcc'
+      - run: python -m ruff check src tests tools
+      - run: python -m ruff format --check src tests tools
+  wheel:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install build
+      - run: python -m build
+      - run: python tools/verify_wheel.py dist
