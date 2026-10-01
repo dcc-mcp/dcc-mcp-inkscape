@@ -108,9 +108,10 @@ def test_arbitrary_or_stale_menu_identity_is_rejected(proof, change):
 
 
 def test_non_windows_verified_control_is_explicitly_unsupported(monkeypatch):
+    executable = Path("unused")
     monkeypatch.setattr(menu_process.os, "name", "posix")
     with pytest.raises(ValueError, match="Windows only"):
-        menu_process.WindowsMenuProcess([], {}, Path("unused"))
+        menu_process.WindowsMenuProcess([], {}, executable)
 
 
 def test_native_handshake_is_nonce_profile_bound_and_no_overwrite(tmp_path, monkeypatch):

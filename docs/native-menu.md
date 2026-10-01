@@ -39,9 +39,16 @@ bundled inkex 1.4.0 exposes the public extension base through `inkex.base`.
 
 For visual acceptance, open a **new independent Inkscape instance** with that
 profile and a distinct application ID. Preserve current documents and their
-profiles. Use the official exact-process UI service to observe the submenu,
-all three dialogs, their actual configured values, and explicit connection
-behavior. Lifecycle hash checks and action enumeration alone do not establish
+profiles. The menu is installed in the selected private profile, not in an
+already-open instance using the user's default profile. A separately opened
+instance can load it without closing unsaved work. If reusing an existing
+instance's profile is planned later, save its documents before the operator
+closes and reopens it; this lifecycle never performs that restart.
+
+Use the official exact-process UI service for observations only when that
+service permits the actual target. Observe the submenu, dialogs, configured
+values, and explicit connection behavior separately. Lifecycle hash checks and
+action enumeration alone do not establish
 visual acceptance. Controller readiness and GUI document acceptance remain
 separate evidence.
 
@@ -71,6 +78,11 @@ The case's installed-wheel Windows 1.4.4 smoke opened Status and verified its
 native nonce, `SELF_CALL`, exact Job membership, bundled Python image and live
 process-birth identities. That is component evidence. MCP route acceptance and
 the visible submenu/dialog contents require their own actual observations.
+The case's official UI service rejected the Status dialog's bundled
+`pythonw.exe` process as `invalid_target`. That screenshot remains unavailable;
+do not change providers, disguise the process, weaken UI policy, or capture
+the rejected panel indirectly through the host. Native launch evidence does
+not remove this visual-acceptance gap.
 
 The ownership contract follows Microsoft's
 [Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)
