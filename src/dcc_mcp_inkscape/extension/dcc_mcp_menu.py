@@ -3,13 +3,16 @@
 from pathlib import Path
 
 import inkex
+from inkex.base import InkscapeExtension
 from menu_bridge import invoke
 from menu_bridge import publish_menu_identity
 
 
-class DccMcpMenu(inkex.InkscapeExtension):
+class DccMcpMenu(InkscapeExtension):
+    PAGE = "status"
+
     def add_arguments(self, parser):
-        parser.add_argument("--page", choices=("status", "settings", "connection"), default="status")
+        parser.add_argument("--page", choices=("status", "settings", "connection"), default=self.PAGE)
 
     def load(self, stream):
         return None

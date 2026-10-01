@@ -89,7 +89,9 @@ def test_visible_native_descriptors_preserve_hidden_typed_action():
         assert effect.get("implements-custom-gui") == "true"
         assert effect.find("inx:effects-menu", ns).get("hidden") != "true"
         assert effect.find("inx:effects-menu/inx:submenu", ns).get("name") == "DCC MCP"
-        assert root.find("inx:script/inx:command", ns).text == "dcc_mcp_menu.py"
+        script = "dcc_mcp_menu.py" if page == "status" else "dcc_mcp_" + page + ".py"
+        assert root.find("inx:script/inx:command", ns).text == script
+        assert root.find("inx:param", ns) is None
         ids.add(root.find("inx:id", ns).text)
     assert len(ids) == 3
 
@@ -247,3 +249,33 @@ def test_boolean_receipt_schema_is_rejected(installed):
     value["schema_version"] = True
     receipt.write_text(json.dumps(value), encoding="utf-8")
     assert run("status")[0] == 10
+
+
+def test_first_source_menu_manifest_migrates_only_through_explicit_upgrade(installed):
+    workspace, run, receipt, context = installed
+    value = json.loads(receipt.read_text(encoding="utf-8"))
+    new_names = {"dcc_mcp_settings.py", "dcc_mcp_connection.py"}
+    for record in value["files"]:
+        if Path(record["path"]).name in new_names:
+            Path(record["path"]).unlink()
+    value["files"] = [record for record in value["files"] if Path(record["path"]).name not in new_names]
+    value.pop("resource_manifest_revision")
+    receipt.write_text(json.dumps(value), encoding="utf-8")
+    before = snapshot(workspace)
+    assert run("status")[1]["state"] == "upgrade"
+    assert run("verify")[0] == 40
+    assert snapshot(workspace) == before
+    assert run("upgrade", "--yes")[0] == 40
+    assert json.loads(receipt.read_text(encoding="utf-8"))["resource_manifest_revision"] == 2
+    assert all(context.with_name(name).is_file() for name in new_names)
+
+
+@pytest.mark.parametrize("revision", [True, 0, 3, "2"])
+def test_unknown_menu_resource_revision_is_refused(installed, revision):
+    workspace, run, receipt, context = installed
+    value = json.loads(receipt.read_text(encoding="utf-8"))
+    value["resource_manifest_revision"] = revision
+    receipt.write_text(json.dumps(value), encoding="utf-8")
+    before = snapshot(workspace)
+    assert run("upgrade", "--yes")[0] == 10
+    assert snapshot(workspace) == before

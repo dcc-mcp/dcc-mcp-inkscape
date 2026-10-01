@@ -2,11 +2,10 @@
 <inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension" translationdomain="none">
   <name>Connection</name>
   <id>org.dcc-mcp.menu.connection</id>
-  <param name="page" type="string" gui-hidden="true">connection</param>
   <effect needs-document="false" needs-live-preview="false" implements-custom-gui="true">
     <object-type>all</object-type>
     <effects-menu><submenu name="DCC MCP"/></effects-menu>
     <menu-tip>Check the scoped connection or explicitly start the configured adapter.</menu-tip>
   </effect>
-  <script><command location="inx" interpreter="python">dcc_mcp_menu.py</command></script>
+  <script><command location="inx" interpreter="python">dcc_mcp_connection.py</command></script>
 </inkscape-extension>

@@ -20,8 +20,10 @@ from urllib.request import build_opener
 
 from dcc_mcp_inkscape.__version__ import __version__
 from dcc_mcp_inkscape.resources import EXTENSION_FILES
+from dcc_mcp_inkscape.resources import FIRST_MENU_NAMES
 from dcc_mcp_inkscape.resources import LEGACY_NAMES
 from dcc_mcp_inkscape.resources import MENU_CONTEXT
+from dcc_mcp_inkscape.resources import RESOURCE_REVISION
 
 HERE = Path(__file__).resolve().parent
 OWNER = "dcc-mcp-inkscape"
@@ -263,7 +265,12 @@ def _payloads(config, probe=None):
 def _artifacts(workspace, receipt, config, probe=None, removing=False):
     files = receipt.get("files", []) if receipt else []
     legacy = bool(receipt and receipt.get("schema_version") == 1)
-    names = LEGACY_NAMES if legacy else set(FILES) | {MENU_CONTEXT}
+    revision = receipt.get("resource_manifest_revision", 1) if receipt else RESOURCE_REVISION
+    if type(revision) is not int or revision not in (1, RESOURCE_REVISION):
+        raise ValueError("Receipt resource manifest revision is invalid")
+    names = (
+        LEGACY_NAMES if legacy else (set(FILES) if revision == RESOURCE_REVISION else FIRST_MENU_NAMES) | {MENU_CONTEXT}
+    )
     if receipt and (not isinstance(files, list) or len(files) != len(names)):
         raise ValueError("Receipt file ownership inventory is invalid")
     payloads = _payloads(config, probe)
@@ -492,6 +499,7 @@ def _apply(workspace, install_root, receipt_path, receipt, config, inventory, pr
         owned = [{"path": str(path), "sha256": _digest(path)} for path in targets]
         committed = {
             "schema_version": RECEIPT_VERSION,
+            "resource_manifest_revision": RESOURCE_REVISION,
             "owner": OWNER,
             "workspace": str(workspace),
             "adapter_version": __version__,
@@ -556,6 +564,7 @@ def run_install_command(args):
         current = bool(
             receipt
             and receipt.get("schema_version") == RECEIPT_VERSION
+            and receipt.get("resource_manifest_revision", 1) == RESOURCE_REVISION
             and all(record["actual_sha256"] == record["sha256"] for record in inventory)
             and receipt.get("adapter_version") == __version__
             and (install_root / "config.json").is_file()
@@ -566,7 +575,11 @@ def run_install_command(args):
             else (
                 "upgrade"
                 if receipt
-                and (receipt.get("adapter_version") != __version__ or receipt.get("schema_version") != RECEIPT_VERSION)
+                and (
+                    receipt.get("adapter_version") != __version__
+                    or receipt.get("schema_version") != RECEIPT_VERSION
+                    or receipt.get("resource_manifest_revision", 1) != RESOURCE_REVISION
+                )
                 else ("repair" if receipt else "fresh")
             )
         )
