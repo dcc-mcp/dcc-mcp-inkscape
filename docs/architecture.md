@@ -94,7 +94,9 @@ and retain actual-renderer QA for other paint forms.
 The public native menu is separate from the hidden typed-vector effect. Three
 INX descriptors use Inkscape's `needs-document=false` and native custom-GUI
 protocol. The bundled host Python opens GTK dialogs and never loads or saves
-SVG content. A stdlib bridge accepts only the profile-local context whose hash
+SVG content. Each descriptor selects a fixed script entry point because the
+native no-document path discards INX parameters. A stdlib bridge accepts only
+the profile-local context whose hash
 and exact workspace/profile/configuration match the schema-2 installation
 receipt. It invokes the receipt-selected controller Python and import root,
 without inherited adapter scope overrides. Status/settings/connection checks
@@ -116,6 +118,12 @@ is needed when no owned menu context exists. This is not an installed/readiness
 claim. The static file inventory is shared by runtime and installer, and wheel
 verification requires every menu resource.
 
+Private receipt schema 2 uses resource-manifest revision 2 for the eleven static
+resources and generated context. The first source-only menu prototype had nine
+static resources. Status and verify inspect that older inventory without
+mutation; explicit upgrade migrates it to the fixed script entries. Unknown
+receipt schemas, manifest revisions, or unowned new targets are refused.
+
 The service owner is the standalone controller, not an optional GUI process.
 Every native operation launches its own uniquely tagged Inkscape process and
 private profile. Operations are monolithic; Core job cancellation does not
@@ -128,7 +136,8 @@ This package adds no screenshots, window discovery, input, or UI authority.
 
 ## Scope
 
-The initial version contains five typed tools. It does not bind a persistent
+The adapter contains five vector/document tools and the bounded `control_open`
+native menu tool. It does not bind a persistent
 GUI document, advertise a scene publisher, embed Python into Inkscape, install
 system fonts, bundle software binaries, or claim macOS adapter support.
 Application-private Fontconfig adds operator-selected font directories and

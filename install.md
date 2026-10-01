@@ -64,8 +64,8 @@ The stable receipt is `<workspace>/.dcc-mcp-inkscape/install/receipt.json`;
 the adjacent `config.json` records interpreter, software, profile, registry,
 gateway, and private readiness-publication paths. The receipt records actual
 host/Core/adapter versions, import origin, the SOP v2 artifact digest, and
-SHA-256 for the enabled extension files and generated menu context. The selected interpreter's effect
-bytes must match the installer package before execution.
+SHA-256 for the enabled extension files and generated menu context. The selected
+interpreter's effect bytes must match the installer package before execution.
 
 An existing unreceipted extension is never adopted or overwritten. A modified
 owned effect or configuration blocks upgrade/removal before mutation. Use a
@@ -114,11 +114,16 @@ native editing/export after readiness succeeds.
 ## SOP and exit codes
 
 Private installation receipts now use schema **2**, separately from the shared
-Install SOP report schema. They own nine static native extension resources and
-one deterministic profile-local menu context. Existing schema-1 receipts own
+Install SOP report schema. Resource-manifest revision **2** owns eleven static
+native extension resources and one deterministic profile-local menu context.
+The first source-only schema-2 menu prototype (revision 1 or an absent revision)
+owns nine static resources and its context. Status/verify inspect that inventory
+without adding the new fixed script entries; explicit upgrade migrates it.
+Existing schema-1 receipts own
 only their original four files. `status` and `verify` inspect them without
 adding menus; plan and execute `upgrade` to migrate, after stopping the exact
-controller using that scope. Unknown receipt schemas are refused. New menu
+controller using that scope. Unknown receipt schemas or manifest revisions are
+refused. New menu
 targets must not exist without ownership, even when their bytes match the
 bundle. Failed migration restores the previous owned files and receipt.
 Uninstalling a schema-1 installation removes only its original files.
