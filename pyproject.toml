@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dcc-mcp-inkscape"
+version = "0.1.0"
+description = "Native Inkscape vector authoring and export through typed DCC-MCP tools"
+authors = [{name = "Long Hao", email = "hal.long@outlook.com"}]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.7"
+dependencies = ["dcc-mcp-core>=0.20.36,<1.0.0"]
+keywords = ["inkscape", "vector", "svg", "dcc", "mcp", "model-context-protocol"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Multimedia :: Graphics :: Editors :: Vector-Based",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7,<8; python_version < '3.8'",
+  "pytest>=8; python_version >= '3.8'",
+  "ruff>=0.8",
+  "build",
+  "pyyaml>=5",
+]
+
+[project.urls]
+Homepage = "https://github.com/dcc-mcp/dcc-mcp-inkscape"
+Repository = "https://github.com/dcc-mcp/dcc-mcp-inkscape"
+Issues = "https://github.com/dcc-mcp/dcc-mcp-inkscape/issues"
+Changelog = "https://github.com/dcc-mcp/dcc-mcp-inkscape/blob/main/CHANGELOG.md"
+
+[project.scripts]
+dcc-mcp-inkscape = "dcc_mcp_inkscape.cli:main"
+
+[project.entry-points."dcc_mcp.adapters"]
+inkscape = "dcc_mcp_inkscape:InkscapeMcpServer"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dcc_mcp_inkscape"]
+artifacts = ["src/dcc_mcp_inkscape/skills/**", "src/dcc_mcp_inkscape/extension/**"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"THIRD_PARTY_NOTICES.md" = "dcc_mcp_inkscape/THIRD_PARTY_NOTICES.md"
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "tools", "docs", "README.md", "install.md", "AGENTS.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "pyproject.toml", ".github/workflows/ci.yml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = ["dcc: real native Inkscape tests requiring explicit operator opt-in"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py37"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dcc_mcp_inkscape"]
+force-single-line = true
+
+[tool.ruff.format]
+quote-style = "double"
