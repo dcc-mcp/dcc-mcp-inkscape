@@ -8,6 +8,7 @@ import pytest
 
 from dcc_mcp_inkscape import menu_bridge
 from dcc_mcp_inkscape import menu_process
+from dcc_mcp_inkscape.runtime import InkscapeRuntime
 
 
 @pytest.fixture
@@ -128,3 +129,73 @@ def test_native_handshake_is_nonce_profile_bound_and_no_overwrite(tmp_path, monk
 def test_manual_menu_does_not_write_identity_without_control_request(monkeypatch):
     monkeypatch.delenv("DCC_MCP_INKSCAPE_MENU_REQUEST", raising=False)
     assert menu_bridge.publish_menu_identity(Path("unused"), "status") is None
+
+
+@pytest.mark.parametrize("panel", ["status;export-do", "unknown", "status\n", None])
+def test_control_open_rejects_arbitrary_actions_before_any_launch(tmp_path, panel):
+    runtime = InkscapeRuntime.__new__(InkscapeRuntime)
+    runtime.workspace = tmp_path
+    with pytest.raises(ValueError, match="Control panel"):
+        runtime.control_open(panel)
+
+
+def test_control_source_cannot_escape_workspace_or_embed_external_data(tmp_path):
+    runtime = InkscapeRuntime.__new__(InkscapeRuntime)
+    runtime.workspace = tmp_path
+    with pytest.raises(ValueError, match="outside"):
+        runtime.control_open(source_file=tmp_path.parent / "outside.svg")
+    fixture = tmp_path / "unsafe-test-fixture.svg"
+    fixture.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg"><image href="https://example.invalid/a.png"/></svg>', encoding="utf-8"
+    )
+    with pytest.raises(ValueError):
+        runtime.control_open(source_file=fixture)
+
+
+def test_control_open_returns_only_verified_native_identity_and_closes_proof_handles(tmp_path, monkeypatch):
+    runtime = InkscapeRuntime.__new__(InkscapeRuntime)
+    runtime.workspace = tmp_path.resolve()
+    runtime.state = runtime.workspace / "private"
+    runtime.profile = runtime.state / "profile"
+    runtime.executable = runtime.workspace / "inkscape.exe"
+    runtime.environment = {"INKSCAPE_PROFILE_DIR": str(runtime.profile)}
+    monkeypatch.setattr(menu_bridge, "load_context", lambda context: {})
+    observed = {}
+
+    class Owned:
+        pid = 9001
+
+        def __init__(self, command, environment, workspace):
+            observed["command"] = command
+            request = json.loads(environment["DCC_MCP_INKSCAPE_MENU_REQUEST"])
+            evidence = runtime.state / "evidence" / ("menu-" + request["nonce"] + ".json")
+            evidence.write_text(
+                json.dumps(
+                    {
+                        **request,
+                        "menu_pid": 9002,
+                        "menu_parent_pid": 9003,
+                        "menu_executable": "unit-fixture",
+                        "self_call": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+        def poll(self):
+            return None
+
+        def verify_menu(self, identity):
+            assert identity["menu_pid"] == 9002
+            observed["verified"] = True
+            return {"mode": "unit-fixture"}
+
+        def close(self):
+            observed["closed"] = True
+
+    monkeypatch.setattr(menu_process, "WindowsMenuProcess", Owned)
+    result = runtime.control_open("settings")
+    assert observed["verified"] and observed["closed"]
+    assert observed["command"][-1] == "--actions=org.dcc-mcp.menu.settings"
+    assert result["host_pid"] == 9001 and result["menu_pid"] == 9002
+    assert result["accepted"] is False
