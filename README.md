@@ -3,7 +3,7 @@
 Dedicated DCC-MCP adapter for native Inkscape vector authoring and export.
 
 The adapter creates native editable layers, groups, paths, shapes, text, and
-linear gradients from bounded typed plans. Inkscape invokes the bundled inkex
+linear and radial gradients from bounded typed plans. Inkscape invokes the bundled inkex
 effect, commits its returned document, and writes the SVG. Native actions
 perform export and text-to-path conversion.
 
@@ -81,12 +81,24 @@ This adapter adds no screenshot, input, desktop discovery, or UI wrapper.
 ```
 
 Plans allow ordered native layers/groups, paths, rectangles, circles, ellipses,
-text, and linear gradients. Raw XML/SVG, scripts, arbitrary actions, external
+text, and linear/radial gradients. Raw XML/SVG, scripts, arbitrary actions, external
 resources, CSS injection, nonfinite values, and unknown fields are rejected.
 The limits are 2 MB, 5000 objects, and a 32768 px canvas. Output paths stay in
 the configured workspace and must be new filenames. Small icons should use
 separate simplified vector plans. ICO/ICNS packaging is external to this
 adapter's native SVG/PNG/PDF exports.
+
+Radial gradients use `type: radial_gradient` (`radialGradient` is an alias),
+explicit numeric `cx`, `cy`, and `r`, plus optional `fx` and `fy` that default
+to the center. Coordinates have absolute value at most `1e6`; radius is
+`1e-9..1e6`. `gradient_units` is `userSpaceOnUse` by default or
+`objectBoundingBox`; normalized coordinates may extend outside `0..1` for
+off-center illumination. `gradient_transform` accepts the same bounded SVG
+transform functions as other nodes, including nonuniform scaling. Each
+gradient lives in native root `<defs>`, has no parent, and contains 2..64
+ordered literal-color stops with offset/opacity in `0..1`. Paint references
+can target either gradient type. This creates continuous native paint on a
+single smooth path; it adds no bitmap tracing or filter authority.
 
 Native `object-to-path` can resolve a live text `currentColor` paint to black,
 including when the token is inherited from a parent. Text conversion therefore

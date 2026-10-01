@@ -72,6 +72,21 @@ canvas. Reopened files reject executable objects, external resources, CSS
 imports/escapes, DTD/stylesheet instructions, and alternate XML encodings.
 Existing outputs cannot be replaced.
 
+Radial gradients are native `inkex.RadialGradient` objects in root SVG
+`defs`. The bounded plan normalizes optional focal coordinates to the center
+and exposes no linked gradient resources, raw XML, or filters. Publication
+checks radial coordinates, units, affine transform equivalence, and the
+ordered native stop structure after Inkscape saves the document. Coordinate
+comparisons tolerate native serialization rounding; transforms remain native
+`gradientTransform` fields, including nonuniform scaling.
+
+Opaque hexadecimal stop colors are compared semantically against saved
+hexadecimal or integer `rgb()` values. Named colors, `currentColor`, and
+hexadecimal alpha colors retain the existing host paint contract; their
+resolved color is not established by this limited controller comparison.
+Use `#RRGGBB` plus explicit stop opacity for fully checked material stops,
+and retain actual-renderer QA for other paint forms.
+
 ## Lifecycle
 
 The service owner is the standalone controller, not an optional GUI process.
