@@ -96,6 +96,16 @@ query, then reads the selected backend's `/v1/readyz` using Core's readiness
 projection. The probe never starts a host, contacts a shared gateway, calls an
 effect, or writes a profile. A stale ready file alone proves nothing.
 
+Every non-null adapter version reported by the registry must exactly match
+the installed package. Core 0.20.36 can omit both adapter-version fields for
+a standalone native controller. Only in that case, verification can use the
+adapter's ready-file version, with `readiness.version_source` set to
+`adapter_ready_file`. The ready publication must match the live registry
+entry's UUID, owner PID, backend MCP URL, canonical workspace, and private
+profile, and identify this adapter/version with status `ready`. Any binding
+failure is rejected; a ready file never overrides an explicit registry version
+conflict. A registry version is reported with `version_source: registry`.
+
 The controller has `instance_type: standalone`; it launches real native
 Inkscape operations for each typed request. It does not claim a persistent GUI
 document binding. Use discovery, then the actual typed vector tools, to prove
