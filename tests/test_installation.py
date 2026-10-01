@@ -301,12 +301,14 @@ def test_readiness_requires_matching_live_identity_and_boolean_bits(tmp_path, mo
         "ready_file": str(tmp_path / "ready.json"),
     }
     published = {
+        "status": "ready",
         "adapter": installation.OWNER,
         "adapter_version": installation.__version__,
         "workspace": config["workspace"],
         "profile": config["profile"],
         "instance_id": "owned-fixture",
         "owner_pid": 123,
+        "backend_mcp_url": "http://127.0.0.1:19769/mcp",
     }
     entry = {
         "instance_id": "owned-fixture",
@@ -339,3 +341,106 @@ def test_readiness_requires_matching_live_identity_and_boolean_bits(tmp_path, mo
     report = installation._runtime(config)
     assert report["ready"] is (mismatch is None)
     assert tree(tmp_path) == before
+
+
+@pytest.fixture
+def runtime_scope(tmp_path, monkeypatch):
+    """Actual Core 0.20.36 projection shape, without starting a service."""
+    from dcc_mcp_core import deployment
+    from dcc_mcp_core.readiness import READINESS_ALL_BITS
+
+    config = {
+        "workspace": str(tmp_path),
+        "profile": str(tmp_path / "private/profile"),
+        "registry_dir": str(tmp_path / "registry"),
+        "ready_file": str(tmp_path / "ready.json"),
+    }
+    published = {
+        "status": "ready",
+        "adapter": installation.OWNER,
+        "adapter_version": installation.__version__,
+        "workspace": config["workspace"],
+        "profile": config["profile"],
+        "instance_id": "4d7c3fdd-7046-4a10-9227-d0025b043180",
+        "owner_pid": 360592,
+        "backend_mcp_url": "http://127.0.0.1:64604/mcp",
+    }
+    entry = {
+        "instance_id": published["instance_id"],
+        "runtime_pid": published["owner_pid"],
+        "runtime_alive": True,
+        "adapter_version": None,
+        "versions": {"core": None, "server": "0.20.36", "adapter": None},
+        "dispatch": {"reported": False, "status": "not_reported", "ready": None},
+        "mcp_url": published["backend_mcp_url"],
+        "metadata": {"project": config["workspace"]},
+    }
+    monkeypatch.setattr(deployment, "query_runtime_state", lambda *args, **kwargs: {"entries": [entry]})
+
+    class LocalReadiness:
+        def open(self, endpoint, timeout):
+            assert endpoint == "http://127.0.0.1:64604/v1/readyz"
+            return io.BytesIO(json.dumps({key: True for key in READINESS_ALL_BITS}).encode("utf-8"))
+
+    monkeypatch.setattr(installation, "build_opener", lambda *handlers: LocalReadiness())
+    return config, published, entry
+
+
+def runtime_report(runtime_scope):
+    config, published, entry = runtime_scope
+    Path(config["ready_file"]).write_text(json.dumps(published), encoding="utf-8")
+    before = tree(Path(config["workspace"]))
+    report = installation._runtime(config)
+    assert tree(Path(config["workspace"])) == before
+    return report
+
+
+def test_core_036_missing_registry_versions_use_exact_bound_adapter_publication(runtime_scope):
+    report = runtime_report(runtime_scope)
+    assert report["ready"] is True and report["status"] == "ready"
+    assert report["version_source"] == "adapter_ready_file"
+    assert all(report["bits"].values())
+
+
+@pytest.mark.parametrize(
+    "top,nested,expected_ready",
+    [
+        (installation.__version__, None, True),
+        (None, installation.__version__, True),
+        ("other-version", installation.__version__, False),
+        (installation.__version__, "other-version", False),
+        ("", None, False),
+        (False, None, False),
+    ],
+)
+def test_nonnull_registry_versions_cannot_be_overridden_by_ready_file(runtime_scope, top, nested, expected_ready):
+    config, published, entry = runtime_scope
+    entry["adapter_version"] = top
+    entry["versions"]["adapter"] = nested
+    report = runtime_report(runtime_scope)
+    assert report["ready"] is expected_ready
+    assert report["version_source"] == "registry"
+
+
+@pytest.mark.parametrize("registry_version", [None, installation.__version__])
+@pytest.mark.parametrize(
+    "field,bad_value",
+    [
+        ("instance_id", "stale-instance"),
+        ("owner_pid", 360593),
+        ("workspace", "other-workspace"),
+        ("profile", "other-profile"),
+        ("backend_mcp_url", "http://127.0.0.1:64605/mcp"),
+        ("adapter", "other-adapter"),
+        ("adapter_version", "other-version"),
+        ("status", "starting"),
+    ],
+)
+def test_any_ready_file_binding_mismatch_denies_readiness(runtime_scope, registry_version, field, bad_value):
+    config, published, entry = runtime_scope
+    entry["adapter_version"] = registry_version
+    published[field] = bad_value
+    report = runtime_report(runtime_scope)
+    assert report["ready"] is False and report["status"] == "not_ready"
+    assert all(report["bits"].values())
+    assert report["version_source"] == ("registry" if registry_version is not None else None)

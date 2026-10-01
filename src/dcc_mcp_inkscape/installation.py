@@ -305,6 +305,29 @@ def _runtime(config, instance_id=None):
         return {"status": "ambiguous", "ready": False, "entries": candidates}
     entry = candidates[0]
     url = str(entry.get("mcp_url") or "")
+    published_matches = (
+        published_scope
+        and published.get("status") == "ready"
+        and bool(entry.get("instance_id"))
+        and entry.get("instance_id") == published.get("instance_id")
+        and type(entry.get("runtime_pid")) is int
+        and entry["runtime_pid"] > 0
+        and type(published.get("owner_pid")) is int
+        and entry["runtime_pid"] == published["owner_pid"]
+        and published.get("backend_mcp_url") == url
+    )
+    versions = entry.get("versions") or {}
+    registry_versions = [
+        value for value in (entry.get("adapter_version"), versions.get("adapter")) if value is not None
+    ]
+    if registry_versions:
+        version_source = "registry"
+        version_matches = all(value == __version__ for value in registry_versions)
+    else:
+        # Core 0.20.36 may omit native standalone adapter versions. A private
+        # publication is usable only when bound to this exact live entry.
+        version_source = "adapter_ready_file" if published_matches else None
+        version_matches = published_matches
     parsed = urlsplit(url)
     if (
         parsed.scheme != "http"
@@ -329,12 +352,14 @@ def _runtime(config, instance_id=None):
             len(bits) == len(READINESS_ALL_BITS)
             and all(bits.values())
             and all(type(report.get(key)) is bool for key in READINESS_ALL_BITS)
-            and (entry.get("adapter_version") or entry.get("versions", {}).get("adapter")) == __version__
+            and published_matches
+            and version_matches
         )
         return {
             "status": "ready" if ready else "not_ready",
             "ready": ready,
             "instance_id": entry.get("instance_id"),
+            "version_source": version_source,
             "bits": bits,
             "entries": candidates,
         }
