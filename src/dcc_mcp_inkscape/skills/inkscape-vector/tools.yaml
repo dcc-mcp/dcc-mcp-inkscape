@@ -583,7 +583,8 @@
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
-        "properties": {"panel": {"type": "string", "enum": ["status", "settings", "connection"], "default": "status"}},
+        "properties": {"panel": {"type": "string", "enum": ["status", "settings", "connection"], "default": "status"},
+                       "source_file": {"type": "string", "description": "Optional existing workspace-contained SVG, validated before opening the new control instance."}},
         "required": []
       },
       "output_schema": {

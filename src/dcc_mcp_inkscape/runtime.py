@@ -617,13 +617,17 @@ class InkscapeRuntime:
             "next_step": "Observe this exact process with the official scoped ui-control service",
         }
 
-    def control_open(self, panel="status"):
+    def control_open(self, panel="status", source_file=None):
         """Open only a fixed native menu dialog in a new independent host instance."""
         from dcc_mcp_inkscape.menu_bridge import load_context
         from dcc_mcp_inkscape.menu_process import WindowsMenuProcess
 
         if panel not in ("status", "settings", "connection"):
             raise ValueError("Control panel must be status, settings, or connection")
+        source = None
+        if source_file is not None:
+            source = contained_path(self.workspace, source_file, suffix=".svg", existing=True)
+            vector_preflight(source)
         load_context(self.profile / "extensions/dcc_mcp_menu_context.json")
         nonce = uuid.uuid4().hex
         evidence = contained_path(self.workspace, self.state / "evidence" / ("menu-" + nonce + ".json"))
@@ -634,6 +638,8 @@ class InkscapeRuntime:
         )
         action = "org.dcc-mcp.menu." + panel
         command = [str(self.executable), "--app-id-tag=dccmcp_control_" + nonce, "--with-gui", "--actions=" + action]
+        if source is not None:
+            command.append(str(source))
         process = WindowsMenuProcess(command, environment, self.workspace)
         try:
             deadline = time.monotonic() + 20
@@ -684,6 +690,7 @@ class InkscapeRuntime:
                 "ownership_proof": proof,
                 "command": command,
                 "evidence_path": str(evidence),
+                "source_path": str(source) if source else None,
                 "producer": "Inkscape native extension GUI",
                 "accepted": False,
                 "next_step": "Observe the exact OS-verified native menu PID with the official scoped ui-control service",

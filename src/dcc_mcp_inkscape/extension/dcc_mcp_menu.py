@@ -37,6 +37,26 @@ class DccMcpMenu(inkex.InkscapeExtension):
         scroll.set_vexpand(True)
         scroll.add(text)
         box.pack_start(scroll, True, True, 0)
+        full_paths = Gtk.CheckButton(label="Show full paths")
+        box.pack_start(full_paths, False, False, 0)
+
+        def display_value(key, value, config):
+            if full_paths.get_active() or key not in (
+                "workspace",
+                "profile",
+                "executable",
+                "python",
+                "registry_dir",
+                "ready_file",
+            ):
+                return str(value)
+            path = Path(value)
+            if key in ("profile", "registry_dir", "ready_file"):
+                try:
+                    return str(path.relative_to(config["workspace"]))
+                except ValueError:
+                    pass
+            return path.name
 
         def update(operation):
             try:
@@ -52,7 +72,7 @@ class DccMcpMenu(inkex.InkscapeExtension):
                     "Connection: " + str(ready.get("status", "unavailable")),
                     "Directly usable: " + str(status.get("verify", {}).get("directly_usable", False)),
                 ]
-                lines.extend(key + ": " + str(value) for key, value in config.items())
+                lines.extend(key + ": " + display_value(key, value, config) for key, value in config.items())
                 if report.get("started"):
                     lines.extend(
                         ["Started controller PID: " + str(report["owner_pid"]), "Controller log: " + report["log_file"]]
@@ -63,6 +83,7 @@ class DccMcpMenu(inkex.InkscapeExtension):
 
         refresh = Gtk.Button(label="Refresh status" if self.options.page != "connection" else "Check connection")
         refresh.connect("clicked", lambda button: update(self.options.page))
+        full_paths.connect("toggled", lambda button: update(self.options.page))
         box.pack_start(refresh, False, False, 0)
         if self.options.page == "connection":
             start = Gtk.Button(label="Start configured adapter")

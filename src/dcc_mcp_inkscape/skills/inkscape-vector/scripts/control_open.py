@@ -9,10 +9,11 @@ from dcc_mcp_inkscape.runtime import configured_runtime
 
 
 @skill_entry
-def main(panel="status"):
+def main(panel="status", source_file=None):
     try:
         return skill_success(
-            "Native control dialog opened for visual acceptance", **configured_runtime().control_open(panel)
+            "Native control dialog opened for visual acceptance",
+            **configured_runtime().control_open(panel, source_file=source_file),
         )
     except (KeyError, ValueError, RuntimeError, OSError) as exc:
         return skill_error(str(exc), "inkscape_control_open_failed")
