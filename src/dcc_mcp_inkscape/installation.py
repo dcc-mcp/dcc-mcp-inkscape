@@ -19,16 +19,14 @@ from urllib.request import ProxyHandler
 from urllib.request import build_opener
 
 from dcc_mcp_inkscape.__version__ import __version__
+from dcc_mcp_inkscape.resources import EXTENSION_FILES
+from dcc_mcp_inkscape.resources import LEGACY_NAMES
+from dcc_mcp_inkscape.resources import MENU_CONTEXT
 
 HERE = Path(__file__).resolve().parent
 OWNER = "dcc-mcp-inkscape"
-FILES = {
-    "dcc_mcp_vector.inx": HERE / "extension" / "dcc_mcp_vector.inx",
-    "dcc_mcp_vector.py": HERE / "extension" / "dcc_mcp_vector.py",
-    "plan.py": HERE / "plan.py",
-    "windows_process.py": HERE / "windows_process.py",
-}
-RECEIPT_VERSION = 1
+FILES = EXTENSION_FILES
+RECEIPT_VERSION = 2
 MIN_HOST = (1, 4)
 SOP_DIGEST = "daa5840e07c956d7c9269e5709d6993a3988b905f986c06e7c4c02f5023e9422"
 
@@ -93,7 +91,11 @@ def _resolve(args):
     receipt_path = _inside(workspace, install_root / "receipt.json")
     receipt = _read_json(receipt_path)
     if receipt is not None:
-        if receipt.get("owner") != OWNER or receipt.get("schema_version") != RECEIPT_VERSION:
+        if (
+            receipt.get("owner") != OWNER
+            or type(receipt.get("schema_version")) is not int
+            or receipt.get("schema_version") not in (1, RECEIPT_VERSION)
+        ):
             raise ValueError("Receipt ownership or schema version is invalid")
         if receipt.get("workspace") != str(workspace):
             raise ValueError("Receipt belongs to a different workspace")
@@ -230,9 +232,8 @@ def _probe(config):
         "'adapter_version':__version__,'core_version':dcc_mcp_core.__version__,'steps':[],'next_steps':[],"
         "'receipt_path':None,'verify':{'directly_usable':False,'failure_stage':None,'failure_reason':None}}); "
         "root=Path(dcc_mcp_inkscape.__file__).resolve().parent; "
-        "bundle={name:hashlib.sha256((root/path).read_bytes()).hexdigest() for name,path in "
-        "{'dcc_mcp_vector.inx':'extension/dcc_mcp_vector.inx','dcc_mcp_vector.py':'extension/dcc_mcp_vector.py',"
-        "'plan.py':'plan.py','windows_process.py':'windows_process.py'}.items()}; "
+        "from dcc_mcp_inkscape.resources import EXTENSION_PATHS; "
+        "bundle={name:hashlib.sha256((root/path).read_bytes()).hexdigest() for name,path in EXTENSION_PATHS.items()}; "
         "print(json.dumps({'python':sys.executable,'adapter_version':__version__,'bundle_sha256':bundle,"
         "'adapter_file':dcc_mcp_inkscape.__file__,'core_version':dcc_mcp_core.__version__,"
         "'core_file':dcc_mcp_core.__file__,'schema_id':schema['$id']}))"
@@ -246,30 +247,57 @@ def _probe(config):
     return host
 
 
-def _artifacts(workspace, receipt, config):
+def _payloads(config, probe=None):
+    source = (probe or {}).get("imports", {}).get("adapter_file", str(HERE / "__init__.py"))
+    context = {
+        "schema_version": 1,
+        "workspace": config["workspace"],
+        "config": config,
+        "module_root": str(Path(source).resolve().parent.parent),
+    }
+    payloads = {name: source.read_bytes() for name, source in FILES.items()}
+    payloads[MENU_CONTEXT] = (json.dumps(context, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    return payloads
+
+
+def _artifacts(workspace, receipt, config, probe=None, removing=False):
     files = receipt.get("files", []) if receipt else []
-    if receipt and (not isinstance(files, list) or len(files) != len(FILES)):
+    legacy = bool(receipt and receipt.get("schema_version") == 1)
+    names = LEGACY_NAMES if legacy else set(FILES) | {MENU_CONTEXT}
+    if receipt and (not isinstance(files, list) or len(files) != len(names)):
         raise ValueError("Receipt file ownership inventory is invalid")
-    expected = {str(Path(config["profile"]) / "extensions" / name): _digest(source) for name, source in FILES.items()}
+    payloads = _payloads(config, probe)
+    expected = {
+        str(Path(config["profile"]) / "extensions" / name): hashlib.sha256(data).hexdigest()
+        for name, data in payloads.items()
+        if not removing or name in names
+    }
     recorded = {}
     for record in files:
         if not isinstance(record, dict):
             raise ValueError("Receipt file ownership record is invalid")
         path = _inside(workspace, record.get("path", ""))
-        if str(path) not in expected or str(path) in recorded:
+        if path.name not in names or str(path) not in expected or str(path) in recorded:
             raise ValueError("Receipt contains an unexpected owned file")
-        recorded[str(path)] = record.get("sha256")
+        digest = record.get("sha256")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError("Receipt has an invalid owned file digest")
+        recorded[str(path)] = digest
     results = []
     for path, digest in expected.items():
         target = Path(path)
+        if target.is_symlink():
+            raise ValueError("Managed extension targets cannot be symbolic links")
+        if _inside(workspace, target) != target:
+            raise ValueError("Managed extension targets must retain their canonical profile location")
         actual = _digest(target) if target.is_file() else None
         if target.exists() and actual is None:
             raise ValueError("Managed extension target is not a regular file")
-        if not receipt and actual is not None:
+        if path not in recorded and actual is not None:
             raise ValueError("Existing extension files have no ownership receipt; select a fresh private profile")
-        if receipt and actual is not None and actual != recorded[path]:
+        if path in recorded and actual is not None and actual != recorded[path]:
             raise ValueError("An owned extension file was modified; refusing to overwrite or remove it")
-        results.append({"path": path, "sha256": digest, "actual_sha256": actual})
+        results.append({"path": path, "sha256": digest, "actual_sha256": actual, "owned": path in recorded})
     return results
 
 
@@ -438,16 +466,25 @@ def _apply(workspace, install_root, receipt_path, receipt, config, inventory, pr
     config_path = _inside(workspace, install_root / "config.json")
     previous_config = config_path.read_bytes() if config_path.exists() else None
     previous_receipt = receipt_path.read_bytes() if receipt_path.exists() else None
+    payloads = _payloads(config, probe)
+    changed = set()
     try:
-        for name, record in zip(FILES, inventory):
+        for record in inventory:
             target = _inside(workspace, record["path"])
             target.parent.mkdir(parents=True, exist_ok=True)
             if record["actual_sha256"] != record["sha256"]:
+                if previous[target] is None:
+                    # A concurrent unowned file must never be replaced or rolled back.
+                    with target.open("xb") as stream:
+                        changed.add(target)
+                        stream.write(payloads[target.name])
+                    continue
                 with tempfile.NamedTemporaryFile(dir=str(target.parent), delete=False) as stream:
-                    stream.write(FILES[name].read_bytes())
+                    stream.write(payloads[target.name])
                     staged = Path(stream.name)
                 try:
                     os.replace(str(staged), str(target))
+                    changed.add(target)
                 finally:
                     if staged.exists():
                         staged.unlink()
@@ -473,7 +510,10 @@ def _apply(workspace, install_root, receipt_path, receipt, config, inventory, pr
         _atomic_json(receipt_path, committed)
         return committed
     except (OSError, ValueError):
-        for path, data in list(previous.items()) + [(config_path, previous_config), (receipt_path, previous_receipt)]:
+        for path, data in [(path, previous[path]) for path in changed] + [
+            (config_path, previous_config),
+            (receipt_path, previous_receipt),
+        ]:
             if data is None:
                 if path.exists():
                     path.unlink()
@@ -512,9 +552,10 @@ def run_install_command(args):
         probe = _probe(config)
         report["core_version"] = probe["imports"]["core_version"]
         report["probe"] = probe
-        inventory = _artifacts(workspace, receipt, config)
+        inventory = _artifacts(workspace, receipt, config, probe, removing=args.command == "uninstall")
         current = bool(
             receipt
+            and receipt.get("schema_version") == RECEIPT_VERSION
             and all(record["actual_sha256"] == record["sha256"] for record in inventory)
             and receipt.get("adapter_version") == __version__
             and (install_root / "config.json").is_file()
@@ -524,11 +565,18 @@ def run_install_command(args):
             if current
             else (
                 "upgrade"
-                if receipt and receipt.get("adapter_version") != __version__
+                if receipt
+                and (receipt.get("adapter_version") != __version__ or receipt.get("schema_version") != RECEIPT_VERSION)
                 else ("repair" if receipt else "fresh")
             )
         )
-        report["installed"] = bool(receipt and all(record["actual_sha256"] for record in inventory))
+        report["installed"] = bool(receipt and all(record["actual_sha256"] for record in inventory if record["owned"]))
+        report["menu_resources"] = {
+            "available": current,
+            "receipt_schema_version": receipt.get("schema_version") if receipt else None,
+            "entries": ["Status", "Settings", "Connection"],
+            "gui_observed": False,
+        }
         report["importable"] = True
         report["steps"] = [
             {"id": "preflight", "status": "ok", "message": "Explicit scope and actual host/import probes passed"}
@@ -579,11 +627,12 @@ def run_install_command(args):
             _, _, _, checked_receipt, checked_config = _resolve(args)
             if checked_receipt != receipt or checked_config != config:
                 raise ValueError("Installation state changed after preflight")
-            inventory = _artifacts(workspace, receipt, config)
+            inventory = _artifacts(workspace, receipt, config, probe, removing=args.command == "uninstall")
             if args.command == "uninstall":
                 if receipt:
                     _remove_owned(workspace, install_root, receipt_path, inventory)
                 report["installed"] = False
+                report["menu_resources"].update(available=False, receipt_schema_version=None)
                 report["status"] = "ok"
                 report["verify"]["directly_usable"] = False
                 report["next_steps"] = []
@@ -597,6 +646,7 @@ def run_install_command(args):
                     else _apply(workspace, install_root, receipt_path, receipt, config, inventory, probe)
                 )
                 current = True
+                report["menu_resources"].update(available=True, receipt_schema_version=RECEIPT_VERSION)
                 report["installed"] = True
                 report["status"] = "partial" if not runtime["ready"] else "ok"
                 report["steps"].append(

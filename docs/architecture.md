@@ -91,6 +91,31 @@ and retain actual-renderer QA for other paint forms.
 
 ## Lifecycle
 
+The public native menu is separate from the hidden typed-vector effect. Three
+INX descriptors use Inkscape's `needs-document=false` and native custom-GUI
+protocol. The bundled host Python opens GTK dialogs and never loads or saves
+SVG content. A stdlib bridge accepts only the profile-local context whose hash
+and exact workspace/profile/configuration match the schema-2 installation
+receipt. It invokes the receipt-selected controller Python and import root,
+without inherited adapter scope overrides. Status/settings/connection checks
+reuse the lifecycle's strict public-Core readiness path.
+
+Explicit connection start performs fresh preflight and serializes concurrent
+starts with an exclusively created profile-owned lock. It launches only the
+configured standalone adapter with an explicit gateway and private profile,
+retaining a unique log and actual PID. Publication must match that PID before
+startup is called ready; unresolved startup keeps its lock and is displayed as
+starting. No gateway, current GUI, or safety configuration is changed. An
+existing owned controller is reused. There is no menu-driven document binding
+or automatic process termination.
+
+Runtime initialization validates an installed profile rather than copying new
+resources into an old receipt. Direct, unreceipted private runtime profiles can
+bootstrap the static resource set; the menu reports that lifecycle installation
+is needed when no owned menu context exists. This is not an installed/readiness
+claim. The static file inventory is shared by runtime and installer, and wheel
+verification requires every menu resource.
+
 The service owner is the standalone controller, not an optional GUI process.
 Every native operation launches its own uniquely tagged Inkscape process and
 private profile. Operations are monolithic; Core job cancellation does not

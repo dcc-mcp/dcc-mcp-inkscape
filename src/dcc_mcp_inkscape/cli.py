@@ -32,6 +32,9 @@ def build_parser():
     from dcc_mcp_inkscape.installation import configure_install_parser
 
     configure_install_parser(commands)
+    menu = commands.add_parser("menu", help="Receipt-scoped native menu bridge")
+    menu.add_argument("--context-file", required=True, type=Path)
+    menu.add_argument("--operation", required=True, choices=("status", "settings", "connection", "start"))
     return parser
 
 
@@ -118,6 +121,10 @@ def main(argv=None):
     try:
         if args.command == "serve":
             return run_serve(args)
+        if args.command == "menu":
+            from dcc_mcp_inkscape.menu import run_menu_command
+
+            return run_menu_command(args)
         from dcc_mcp_inkscape.installation import run_install_command
 
         return run_install_command(args)
