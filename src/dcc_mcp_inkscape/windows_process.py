@@ -76,6 +76,37 @@ def query_process(pid, retained_handle=None):
             kernel.CloseHandle(handle)
 
 
+class RetainedWindowsProcess:
+    """Keep one read-only process object alive across its normal termination."""
+
+    def __init__(self, pid):
+        import ctypes
+        from ctypes import wintypes
+
+        if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+            raise ValueError("A positive process identity is required")
+        self.pid = pid
+        self.kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        self.kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        self.kernel.OpenProcess.restype = wintypes.HANDLE
+        self.kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        self.handle = self.kernel.OpenProcess(0x1000, False, pid)
+        if not self.handle:
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    def query(self):
+        """Query the same retained kernel object, including after helper exit."""
+        if not self.handle:
+            raise RuntimeError("The retained process handle is closed")
+        return query_process(self.pid, retained_handle=self.handle)
+
+    def close(self):
+        """Release only the acquired read handle; never terminate a process."""
+        if self.handle:
+            self.kernel.CloseHandle(self.handle)
+            self.handle = None
+
+
 class WindowsHelperObserver:
     """Retain read-only handles to the owned host's short-lived spawn helpers."""
 
@@ -139,7 +170,7 @@ class WindowsHelperObserver:
                         present = self.kernel.Process32NextW(snapshot, ctypes.byref(entry))
                 finally:
                     self.kernel.CloseHandle(snapshot)
-                self.stop.wait(0.025)
+                self.stop.wait(0.001)
         except OSError as exc:
             self.errors.append(str(exc))
 
