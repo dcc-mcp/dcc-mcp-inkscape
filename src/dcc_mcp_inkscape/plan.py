@@ -4,12 +4,13 @@ import json
 import math
 import re
 
-KINDS = {"group", "layer", "path", "rect", "circle", "ellipse", "text", "linear_gradient"}
+GRADIENTS = {"linear_gradient", "radial_gradient"}
+KINDS = {"group", "layer", "path", "rect", "circle", "ellipse", "text"} | GRADIENTS
 ID = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]{0,95}\Z")
 PAINT = re.compile(
     r"(?:#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|none|currentColor|[A-Za-z]+|url\(#[A-Za-z_][A-Za-z0-9_.-]{0,95}\))\Z"
 )
-GEOMETRY = {"x", "y", "width", "height", "rx", "ry", "cx", "cy", "r", "x1", "y1", "x2", "y2"}
+GEOMETRY = {"x", "y", "width", "height", "rx", "ry", "cx", "cy", "r", "fx", "fy", "x1", "y1", "x2", "y2"}
 STYLE = {
     "fill",
     "stroke",
@@ -32,9 +33,10 @@ FIELDS = (
 NUMERIC = r"[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?"
 
 
-def validate_transform(value):
-    """Support only SVG transform functions with finite numeric arguments."""
+def validate_transform(value, maximum=1000000):
+    """Validate bounded SVG transforms and return their affine matrix."""
     remaining = value.strip()
+    result = (1, 0, 0, 1, 0, 0)
     while remaining:
         match = re.match(r"(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^()]*)\)\s*", remaining)
         if not match or re.sub(NUMERIC, "", match[2]).strip(" ,\t"):
@@ -43,9 +45,29 @@ def validate_transform(value):
         allowed = {"matrix": {6}, "translate": {1, 2}, "scale": {1, 2}, "rotate": {1, 3}, "skewX": {1}, "skewY": {1}}
         if len(values) not in allowed[match[1]]:
             raise ValueError("Invalid transform argument count")
-        for item in values:
-            number(float(item), "transform coordinate")
+        values = [number(float(item), "transform coordinate", maximum=maximum) for item in values]
+        kind = match[1]
+        if kind == "matrix":
+            matrix = tuple(values)
+        elif kind == "translate":
+            matrix = (1, 0, 0, 1, values[0], values[1] if len(values) == 2 else 0)
+        elif kind == "scale":
+            matrix = (values[0], 0, 0, values[-1], 0, 0)
+        elif kind == "rotate":
+            cosine, sine = math.cos(math.radians(values[0])), math.sin(math.radians(values[0]))
+            cx, cy = values[1:] if len(values) == 3 else (0, 0)
+            matrix = (cosine, sine, -sine, cosine, cx - cosine * cx + sine * cy, cy - sine * cx - cosine * cy)
+        elif kind == "skewX":
+            matrix = (1, 0, math.tan(math.radians(values[0])), 1, 0, 0)
+        else:
+            matrix = (1, math.tan(math.radians(values[0])), 0, 1, 0, 0)
+        a, b, c, d, e, f = result
+        g, h, i, j, tx, ty = matrix
+        result = (a * g + c * h, b * g + d * h, a * i + c * j, b * i + d * j, a * tx + c * ty + e, b * tx + d * ty + f)
+        if not all(math.isfinite(item) for item in result):
+            raise ValueError("Transform result must remain finite")
         remaining = remaining[match.end() :].lstrip(" ,")
+    return result
 
 
 def number(value, name, minimum=None, maximum=1000000):
@@ -93,6 +115,8 @@ def validate_plan(plan):
         kind, identity = node.get("type"), node.get("id")
         if kind == "linearGradient":
             kind = node["type"] = "linear_gradient"
+        if kind == "radialGradient":
+            kind = node["type"] = "radial_gradient"
         if (
             not isinstance(kind, str)
             or kind not in KINDS
@@ -123,6 +147,16 @@ def validate_plan(plan):
                 )
         if "opacity" in node and node["opacity"] > 1:
             raise ValueError("opacity must be within 0..1")
+        if kind != "radial_gradient" and any(key in node for key in {"fx", "fy"}):
+            raise ValueError("Focal coordinates require a radial gradient")
+        if kind == "radial_gradient":
+            if not {"cx", "cy", "r"}.issubset(node):
+                raise ValueError("Radial gradients require explicit cx, cy, and r")
+            if set(node) & (GEOMETRY - {"cx", "cy", "r", "fx", "fy"}):
+                raise ValueError("Radial gradients support cx, cy, r, fx, and fy geometry only")
+            number(node["r"], "radial gradient radius", 1e-9)
+            node.setdefault("fx", node["cx"])
+            node.setdefault("fy", node["cy"])
         for key in {"fill", "stroke"}:
             if key in node and (not isinstance(node[key], str) or not PAINT.fullmatch(node[key])):
                 raise ValueError("Paint must be a color, currentColor, none, or local gradient reference")
@@ -166,7 +200,7 @@ def validate_plan(plan):
         ):
             if key in node and (not isinstance(node[key], str) or node[key] not in allowed):
                 raise ValueError("Unsupported " + key)
-        if kind == "linear_gradient":
+        if kind in GRADIENTS:
             stops = node.get("stops")
             if not isinstance(stops, list) or not 2 <= len(stops) <= 64 or parent is not None:
                 raise ValueError("Gradients require 2..64 stops and no parent")
@@ -188,6 +222,6 @@ def validate_plan(plan):
     for node in nodes:
         for key in {"fill", "stroke"}:
             value = node.get(key, "")
-            if value.startswith("url(#") and ids.get(value[5:-1]) != "linear_gradient":
+            if value.startswith("url(#") and ids.get(value[5:-1]) not in GRADIENTS:
                 raise ValueError("Unknown gradient reference")
     return plan

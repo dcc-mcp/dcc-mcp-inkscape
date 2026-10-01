@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import math
 import ntpath
 import os
 import re
@@ -12,8 +13,10 @@ import uuid
 from pathlib import Path
 from xml.etree import ElementTree
 
+from dcc_mcp_inkscape.plan import GRADIENTS
 from dcc_mcp_inkscape.plan import number
 from dcc_mcp_inkscape.plan import validate_plan
+from dcc_mcp_inkscape.plan import validate_transform
 from dcc_mcp_inkscape.windows_process import WindowsNativeProcess
 
 ACTION = "org.dcc-mcp.typed-vector-plan"
@@ -227,6 +230,60 @@ def vector_preflight(source):
     return tree
 
 
+def _opaque_rgb(value):
+    """Compare common native opaque color serialization without a CSS engine."""
+    value = value.strip()
+    if re.fullmatch(r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})", value):
+        digits = value[1:]
+        if len(digits) == 3:
+            digits = "".join(item * 2 for item in digits)
+        return tuple(int(digits[index : index + 2], 16) for index in (0, 2, 4))
+    match = re.fullmatch(r"rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)", value, re.IGNORECASE)
+    if match:
+        components = tuple(int(item) for item in match.groups())
+        if all(item <= 255 for item in components):
+            return components
+    return None
+
+
+def _verify_radial_gradient(element, node):
+    """Verify native radial geometry, transforms, and ordered stop structure."""
+    try:
+        for key in ("cx", "cy", "r", "fx", "fy"):
+            saved = number(float(element.get(key, "nan")), "saved radial " + key, 1e-9 if key == "r" else None)
+            if not math.isclose(saved, node[key], rel_tol=1e-6, abs_tol=1e-9):
+                raise ValueError("radial geometry mismatch")
+        if element.get("gradientUnits") != node.get("gradient_units", "userSpaceOnUse"):
+            raise ValueError("radial units mismatch")
+        expected = validate_transform(node.get("gradient_transform", ""))
+        actual = validate_transform(element.get("gradientTransform", ""), maximum=float("inf"))
+        if not all(
+            math.isclose(left, right, rel_tol=1e-6, abs_tol=1e-9) or right == float(format(left, ".6g"))
+            for left, right in zip(expected, actual)
+        ):
+            raise ValueError("radial transform mismatch")
+        stops = list(element)
+        if len(stops) != len(node["stops"]):
+            raise ValueError("radial stop count mismatch")
+        for actual_stop, requested in zip(stops, node["stops"]):
+            if actual_stop.tag != "{http://www.w3.org/2000/svg}stop":
+                raise ValueError("radial stop namespace mismatch")
+            offset = number(float(actual_stop.get("offset", "nan")), "saved stop offset", 0, 1)
+            if not math.isclose(offset, requested["offset"], rel_tol=1e-6, abs_tol=1e-9):
+                raise ValueError("radial stop offset mismatch")
+            style = dict(item.strip().split(":", 1) for item in actual_stop.get("style", "").split(";") if ":" in item)
+            if not style.get("stop-color"):
+                raise ValueError("radial stop color missing")
+            expected_color = _opaque_rgb(requested["color"])
+            if expected_color is not None and _opaque_rgb(style["stop-color"]) != expected_color:
+                raise ValueError("radial stop color mismatch")
+            opacity = number(float(style.get("stop-opacity", "1")), "saved stop opacity", 0, 1)
+            if not math.isclose(opacity, requested.get("opacity", 1), rel_tol=1e-6, abs_tol=1e-9):
+                raise ValueError("radial stop opacity mismatch")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise RuntimeError("Inkscape did not preserve the native radial gradient") from exc
+
+
 def verify_document(source, plan):
     """Prove that the native host committed the requested vector objects."""
     tree = vector_preflight(source)
@@ -235,7 +292,7 @@ def verify_document(source, plan):
     identities = {}
     for element in tree.iter():
         identities.setdefault(element.get("id"), []).append(element)
-    kinds = {"layer": "g", "group": "g", "linear_gradient": "linearGradient"}
+    kinds = {"layer": "g", "group": "g", "linear_gradient": "linearGradient", "radial_gradient": "radialGradient"}
     for node in plan["nodes"]:
         matches = identities.get(node["id"], [])
         if len(matches) != 1 or matches[0].tag != "{http://www.w3.org/2000/svg}" + kinds.get(
@@ -250,8 +307,11 @@ def verify_document(source, plan):
         parent = parents.get(matches[0])
         if node.get("parent") and (parent is None or parent.get("id") != node["parent"]):
             raise RuntimeError("Inkscape did not preserve the requested native grouping")
-        if node["type"] == "linear_gradient" and parent.tag.rsplit("}", 1)[-1] != "defs":
-            raise RuntimeError("Inkscape did not commit the native gradient definition")
+        if node["type"] in GRADIENTS:
+            if parent is None or parent.tag != "{http://www.w3.org/2000/svg}defs" or parents.get(parent) is not root:
+                raise RuntimeError("Inkscape did not commit the native gradient definition")
+            if node["type"] == "radial_gradient":
+                _verify_radial_gradient(matches[0], node)
     for key in ("width", "height"):
         dimension = root.get(key, "0")
         if float(dimension[:-2] if dimension.endswith("px") else dimension) != plan[key]:

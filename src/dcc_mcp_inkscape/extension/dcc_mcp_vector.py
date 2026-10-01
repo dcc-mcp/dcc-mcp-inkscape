@@ -24,6 +24,7 @@ from pathlib import Path  # noqa: E402
 
 import inkex  # noqa: E402
 from plan import GEOMETRY  # noqa: E402
+from plan import GRADIENTS  # noqa: E402
 from plan import STYLE  # noqa: E402
 from plan import validate_plan  # noqa: E402
 
@@ -79,6 +80,7 @@ class TypedVectorPlan(inkex.EffectExtension):
             "ellipse": inkex.Ellipse,
             "text": inkex.TextElement,
             "linear_gradient": inkex.LinearGradient,
+            "radial_gradient": inkex.RadialGradient,
         }
         for node in plan["nodes"]:
             element = classes[node["type"]]()
@@ -96,7 +98,7 @@ class TypedVectorPlan(inkex.EffectExtension):
                     element.style[key.replace("_", "-")] = str(node[key])
             if node["type"] == "text":
                 element.text = node["text"]
-            if node["type"] == "linear_gradient":
+            if node["type"] in GRADIENTS:
                 element.set("gradientUnits", node.get("gradient_units", "userSpaceOnUse"))
                 if "gradient_transform" in node:
                     element.set("gradientTransform", node["gradient_transform"])

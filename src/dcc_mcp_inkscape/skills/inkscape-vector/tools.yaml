@@ -120,6 +120,16 @@
                     "r": {
                       "type": "number"
                     },
+                    "fx": {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    "fy": {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
                     "x1": {
                       "type": "number"
                     },
@@ -145,8 +155,32 @@
                       "type": "number"
                     },
                     "font_weight": {
-                      "type": ["number", "string"],
-                      "enum": [100, 200, 300, 400, 500, 600, 700, 800, 900, "normal", "bold", "100", "200", "300", "400", "500", "600", "700", "800", "900"]
+                      "type": [
+                        "number",
+                        "string"
+                      ],
+                      "enum": [
+                        100,
+                        200,
+                        300,
+                        400,
+                        500,
+                        600,
+                        700,
+                        800,
+                        900,
+                        "normal",
+                        "bold",
+                        "100",
+                        "200",
+                        "300",
+                        "400",
+                        "500",
+                        "600",
+                        "700",
+                        "800",
+                        "900"
+                      ]
                     },
                     "id": {
                       "type": "string",
@@ -198,7 +232,11 @@
                     },
                     "gradient_units": {
                       "type": "string",
-                      "maxLength": 4096
+                      "maxLength": 4096,
+                      "enum": [
+                        "userSpaceOnUse",
+                        "objectBoundingBox"
+                      ]
                     },
                     "gradient_transform": {
                       "type": "string",
@@ -215,7 +253,9 @@
                         "ellipse",
                         "text",
                         "linearGradient",
-                        "linear_gradient"
+                        "linear_gradient",
+                        "radialGradient",
+                        "radial_gradient"
                       ]
                     },
                     "d": {
@@ -251,6 +291,56 @@
                       }
                     }
                   },
+                  "anyOf": [
+                    {
+                      "properties": {
+                        "type": {
+                          "enum": [
+                            "radialGradient",
+                            "radial_gradient"
+                          ]
+                        },
+                        "cx": {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        "cy": {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        "r": {
+                          "type": "number",
+                          "minimum": 1e-09,
+                          "maximum": 1000000
+                        }
+                      },
+                      "required": [
+                        "cx",
+                        "cy",
+                        "r",
+                        "stops"
+                      ]
+                    },
+                    {
+                      "properties": {
+                        "type": {
+                          "enum": [
+                            "group",
+                            "layer",
+                            "path",
+                            "rect",
+                            "circle",
+                            "ellipse",
+                            "text",
+                            "linearGradient",
+                            "linear_gradient"
+                          ]
+                        }
+                      }
+                    }
+                  ],
                   "required": [
                     "type",
                     "id"

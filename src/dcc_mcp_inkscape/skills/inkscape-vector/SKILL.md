@@ -13,8 +13,17 @@ metadata:
 
 Use capabilities first to inspect the actual Inkscape version and actions.
 Create a document with document_build using a structured vector plan. Plans
-contain native layers, groups, paths, shapes, text, and linear gradients; raw
+contain native layers, groups, paths, shapes, text, and linear/radial gradients; raw
 SVG, XML, executable code, and arbitrary actions are not accepted.
+
+For radial paint, create a `radial_gradient` definition with explicit numeric
+`cx`, `cy`, and `r`, optional `fx`/`fy` (default: center), bounded
+`gradient_transform`, and 2..64 ordered stops. Units default to
+`userSpaceOnUse`; `objectBoundingBox` is also supported. Coordinates are finite
+within `-1e6..1e6`, and radius is `1e-9..1e6`. The definition has no `parent`;
+native shapes reference its safe ID with `fill: url(#id)` or `stroke: url(#id)`.
+Use smooth authored Bezier paths with continuous native gradients instead of
+assembling many traced paint fragments.
 
 All vector creation happens in an inkex effect invoked by Inkscape itself.
 The effect returns the edited document to Inkscape; the software commits and
