@@ -23,6 +23,8 @@ def verify_wheel(path):
         "dcc_mcp_inkscape/extension/dcc_mcp_status.inx",
         "dcc_mcp_inkscape/extension/dcc_mcp_settings.inx",
         "dcc_mcp_inkscape/extension/dcc_mcp_connection.inx",
+        "dcc_mcp_inkscape/extension/dcc_mcp_settings.py",
+        "dcc_mcp_inkscape/extension/dcc_mcp_connection.py",
         "dcc_mcp_inkscape/THIRD_PARTY_NOTICES.md",
         "dcc_mcp_inkscape/skills/inkscape-vector/SKILL.md",
         "dcc_mcp_inkscape/skills/inkscape-vector/tools.yaml",

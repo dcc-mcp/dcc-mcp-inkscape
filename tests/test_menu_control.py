@@ -1,6 +1,10 @@
 """Fixed menu actions and kernel-owned child identity checks without a live GUI."""
 
+import argparse
+import importlib.util
 import json
+import sys
+import types
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,6 +12,7 @@ import pytest
 
 from dcc_mcp_inkscape import menu_bridge
 from dcc_mcp_inkscape import menu_process
+from dcc_mcp_inkscape.resources import EXTENSION_FILES
 from dcc_mcp_inkscape.runtime import InkscapeRuntime
 
 
@@ -199,3 +204,35 @@ def test_control_open_returns_only_verified_native_identity_and_closes_proof_han
     assert observed["command"][-1] == "--actions=org.dcc-mcp.menu.settings"
     assert result["host_pid"] == 9001 and result["menu_pid"] == 9002
     assert result["accepted"] is False
+
+
+def test_fixed_no_document_entries_choose_panel_without_any_cli_parameters(monkeypatch):
+    # The real no-document protocol drops INX parameters. Model only its public
+    # base interface, without a top-level inkex.InkscapeExtension export.
+    inkex = types.ModuleType("inkex")
+    inkex.__path__ = []
+    base = types.ModuleType("inkex.base")
+
+    class NativeBase:
+        def __init__(self):
+            self.arg_parser = argparse.ArgumentParser()
+            self.add_arguments(self.arg_parser)
+
+    base.InkscapeExtension = NativeBase
+    monkeypatch.setitem(sys.modules, "inkex", inkex)
+    monkeypatch.setitem(sys.modules, "inkex.base", base)
+    monkeypatch.setitem(sys.modules, "menu_bridge", menu_bridge)
+
+    def load(name, path):
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        monkeypatch.setitem(sys.modules, name, module)
+        spec.loader.exec_module(module)
+        return module
+
+    native = load("dcc_mcp_menu", EXTENSION_FILES["dcc_mcp_menu.py"])
+    assert native.DccMcpMenu().arg_parser.parse_args([]).page == "status"
+    settings = load("dcc_mcp_settings", EXTENSION_FILES["dcc_mcp_settings.py"])
+    assert settings.DccMcpSettings().arg_parser.parse_args([]).page == "settings"
+    connection = load("dcc_mcp_connection", EXTENSION_FILES["dcc_mcp_connection.py"])
+    assert connection.DccMcpConnection().arg_parser.parse_args([]).page == "connection"

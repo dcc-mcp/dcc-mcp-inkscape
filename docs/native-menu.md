@@ -31,6 +31,12 @@ root; Inkscape's own Python supplies inkex and GTK. Missing, modified or
 out-of-scope metadata produces a native diagnostic, with no default-profile or
 default-gateway fallback.
 
+The three entries use fixed script entry points. Inkscape 1.4.4's native
+no-document execution drops INX parameters, so the selected page must not depend
+on a hidden `--page` parameter. The host supplies `SELF_CALL`; the controller
+still requires that native identity and the exact nonce and profile. The
+bundled inkex 1.4.0 exposes the public extension base through `inkex.base`.
+
 For visual acceptance, open a **new independent Inkscape instance** with that
 profile and a distinct application ID. Preserve current documents and their
 profiles. Use the official exact-process UI service to observe the submenu,
@@ -57,6 +63,15 @@ Manually opening the native menu on other platforms requires separate GUI
 acceptance. Job association or identity failures are refused, without attaching
 to an existing application or accepting an arbitrary self-reported PID.
 
+An optional `source_file` opens an existing workspace-contained SVG behind the
+dialog. It passes the same vector/resource preflight used by `document_open`;
+the tool neither edits the source nor accepts arbitrary application actions.
+
+The case's installed-wheel Windows 1.4.4 smoke opened Status and verified its
+native nonce, `SELF_CALL`, exact Job membership, bundled Python image and live
+process-birth identities. That is component evidence. MCP route acceptance and
+the visible submenu/dialog contents require their own actual observations.
+
 The ownership contract follows Microsoft's
 [Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)
 and [AssignProcessToJobObject](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject)
@@ -68,3 +83,6 @@ and bundled native extension-manager example. GTK support is supplied by
 [inkex's GUI environment](https://inkscape.gitlab.io/extensions/documentation/),
 not a new controller GUI dependency. Windows 1.4.4 is the actual case host;
 Linux/macOS GUI behavior requires its own native acceptance.
+
+The no-document argument behavior is established by the official
+[Inkscape 1.4.4 script implementation](https://gitlab.com/inkscape/inkscape/-/blob/INKSCAPE_1_4_4/src/extension/implementation/script.cpp).
