@@ -75,6 +75,7 @@ bundled skill is `inkscape-vector`. Reuse one gateway agent session ID and
 | `document_export` | PNG/SVG/PDF export, Plain SVG, and native text conversion |
 | `document_inspect` | Reopen the saved SVG and query native geometry |
 | `document_open` | Open a separate native GUI process and return its actual PID |
+| `control_open` | Open one fixed native DCC MCP dialog in a new instance; Windows kernel-owned PID proof |
 
 `document_open` returns `accepted=false`. Visual acceptance requires the
 official Core exact-process `ui-control` service bound to the actual PID/HWND.

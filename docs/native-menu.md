@@ -39,6 +39,29 @@ behavior. Lifecycle hash checks and action enumeration alone do not establish
 visual acceptance. Controller readiness and GUI document acceptance remain
 separate evidence.
 
+The typed `control_open` MCP tool accepts only `status`, `settings` or
+`connection`. It invokes that fixed native action in a new private-profile
+Inkscape instance. On Windows it creates the fresh host suspended, assigns an
+unnamed default Job Object before resuming execution, then validates the
+nonce-bound native dialog PID against that exact kernel-owned tree, bundled
+Python image and actual process creation/lifetime data. No job limits,
+kill-on-close, breakaway, security policies or debug policies are set. Releasing
+proof handles preserves the GUI. This menu ownership proof is separate from
+the vector effect's unchanged three-hop process-birth verification.
+
+The result provides OS-verified host/dialog identities for the official
+exact-process UI service. It still returns `accepted=false`; window creation
+and kernel ownership do not prove the visible labels or displayed status.
+The verified MCP control-opening route currently supports Windows only.
+Manually opening the native menu on other platforms requires separate GUI
+acceptance. Job association or identity failures are refused, without attaching
+to an existing application or accepting an arbitrary self-reported PID.
+
+The ownership contract follows Microsoft's
+[Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)
+and [AssignProcessToJobObject](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject)
+documentation.
+
 The implementation follows Inkscape's official
 [INX descriptor contract](https://inkscape.gitlab.io/extensions/documentation/authors/inx-overview.html)
 and bundled native extension-manager example. GTK support is supplied by

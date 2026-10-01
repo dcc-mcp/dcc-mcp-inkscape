@@ -34,5 +34,13 @@ Native text conversion can resolve currentColor paint to black. To preserve
 that token, read the actual outlined glyph path data and submit those paths
 with explicit currentColor paint in a new typed native plan before export.
 Use document_inspect to reopen and query native geometry. document_open starts
-a separate GUI process for exact-process visual acceptance and does not itself
-constitute visual approval. Use the official exact-process ui-control service if needed.
+a separate native GUI for document acceptance. For native adapter-menu QA,
+control_open accepts only status/settings/connection and opens a fresh
+private-profile host/dialog with Windows kernel-owned identity proof. Bind the
+official UI service to the returned actual menu PID; accepted=false remains
+until visual verification. Do not pass arbitrary actions, use raw input,
+restart an existing document, or treat the menu's read-only Settings as an
+alternative configuration writer.
+
+Opening a GUI does not itself constitute visual approval. Use the official
+exact-process ui-control service when needed.

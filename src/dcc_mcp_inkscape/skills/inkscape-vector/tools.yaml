@@ -481,6 +481,27 @@
         "idempotent_hint": false,
         "open_world_hint": false
       }
+    },
+    {
+      "name": "control_open",
+      "description": "Open one fixed DCC MCP native menu dialog in a new isolated Inkscape instance; return OS-verified process identities for official UI acceptance. Windows only.",
+      "source_file": "scripts/control_open.py",
+      "execution": "sync",
+      "affinity": "any",
+      "enforce_thread_affinity": true,
+      "timeout_hint_secs": 60,
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {"panel": {"type": "string", "enum": ["status", "settings", "connection"], "default": "status"}},
+        "required": []
+      },
+      "output_schema": {
+        "type": "object", "required": ["success", "message"],
+        "properties": {"success": {"type": "boolean"}, "message": {"type": "string"},
+                       "context": {"type": "object"}, "error": {"type": "string"}}
+      },
+      "annotations": {"read_only_hint": false, "destructive_hint": false, "idempotent_hint": false, "open_world_hint": false}
     }
   ]
 }
