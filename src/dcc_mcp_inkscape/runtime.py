@@ -13,8 +13,7 @@ from xml.etree import ElementTree
 
 from dcc_mcp_inkscape.plan import number
 from dcc_mcp_inkscape.plan import validate_plan
-from dcc_mcp_inkscape.windows_process import WindowsHelperObserver
-from dcc_mcp_inkscape.windows_process import query_process
+from dcc_mcp_inkscape.windows_process import WindowsNativeProcess
 
 ACTION = "org.dcc-mcp.typed-vector-plan"
 HERE = Path(__file__).resolve().parent
@@ -142,6 +141,36 @@ def verify_windows_observation(evidence, observation):
     for field in ("requested_pid", "pid", "parent_pid", "creation_time", "image_native", "exit_time", "exit_status"):
         if matches[0].get(field) != expected.get(field):
             raise RuntimeError("The controller's observed Windows helper does not match the effect lineage")
+
+
+def verify_windows_birth_observation(evidence, observation):
+    """Require independent birth identities for every member of the full chain."""
+    if observation.get("mode") != "windows-debug-birth-retention":
+        raise RuntimeError("The controller did not retain Windows process births")
+    births = observation.get("birth_processes")
+    if not isinstance(births, list) or observation.get("errors"):
+        raise RuntimeError("Owned Windows process birth collection failed")
+    for expected in evidence["windows_process_lineage"]:
+        matches = [item for item in births if isinstance(item, dict) and item.get("pid") == expected["pid"]]
+        if len(matches) != 1 or matches[0].get("error"):
+            raise RuntimeError("Native process has no unique independently retained birth")
+        birth = matches[0]
+        for field in ("requested_pid", "pid", "parent_pid", "creation_time"):
+            if isinstance(birth.get(field), bool) or not isinstance(birth.get(field), int):
+                raise RuntimeError("Native process birth has an invalid identity")
+        for field in ("requested_pid", "pid", "parent_pid", "creation_time", "image_native"):
+            if birth.get(field) != expected.get(field):
+                raise RuntimeError("Native process birth does not match the effect lineage")
+        if (
+            isinstance(birth.get("exit_time"), bool)
+            or not isinstance(birth.get("exit_time"), int)
+            or birth["exit_time"] != 0
+            or isinstance(birth.get("exit_status"), bool)
+            or not isinstance(birth.get("exit_status"), int)
+            or birth["exit_status"] != 259
+        ):
+            raise RuntimeError("Native process was not retained while alive at birth")
+    verify_windows_observation(evidence, observation)
 
 
 def vector_preflight(source):
@@ -286,22 +315,21 @@ class InkscapeRuntime:
 
     def _run(self, arguments, environment=None, timeout=120, host_report=None, native_provenance=False):
         command = [str(self.executable), "--app-id-tag=dccmcp_" + uuid.uuid4().hex, *arguments]
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=environment or self.environment,
-            shell=False,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
         host_process = None
-        helper_observer = None
+        native_process = None
         if native_provenance and os.name == "nt":
-            try:
-                host_process = query_process(process.pid)
-            except OSError as exc:
-                host_process = {"error": str(exc), "requested_pid": process.pid}
-            helper_observer = WindowsHelperObserver(process.pid)
+            native_process = WindowsNativeProcess(command, environment or self.environment)
+            process = native_process.process
+            host_process = native_process.host_process
+        else:
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=environment or self.environment,
+                shell=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
         timed_out = False
         try:
             stdout, stderr = process.communicate(timeout=timeout)
@@ -310,7 +338,7 @@ class InkscapeRuntime:
             process.kill()
             stdout, stderr = process.communicate()
         finally:
-            observed_helpers = helper_observer.finish() if helper_observer is not None else None
+            observed_helpers = native_process.finish() if native_process is not None else None
         result = {
             "host_pid": process.pid,
             "returncode": process.returncode,
@@ -409,7 +437,11 @@ class InkscapeRuntime:
         )
         if evidence["provenance_mode"] == "windows-glib-helper":
             observation = invocation.get("observed_windows_helpers")
-            if isinstance(observation, dict) and observation.get("helpers"):
+            if isinstance(observation, dict) and observation.get("mode") == "windows-debug-birth-retention":
+                verify_windows_birth_observation(evidence, observation)
+                evidence["controller_helper_observation"] = "exact-match"
+                evidence["controller_birth_observation"] = "exact-match"
+            elif isinstance(observation, dict) and observation.get("helpers"):
                 verify_windows_observation(evidence, observation)
                 evidence["controller_helper_observation"] = "exact-match"
             else:

@@ -98,8 +98,10 @@ through Inkscape. It does not patch software-written SVG externally.
 Every build records nonce, software/effect/helper identities, exact argv,
 diagnostics, and output hash. Publication checks the exact native objects,
 hierarchy, gradient definitions, and canvas from the software-written SVG.
-Unknown or unreadable process chains fail closed. Missed optional helper
-snapshots are disclosed and still require the complete native chain. See
+Unknown or unreadable process chains fail closed. Windows builds retain their
+fresh process tree at native birth events and require those independent
+identities to match the complete effect chain, including short-lived helpers.
+This launches only owned processes and changes no system security settings. See
 [architecture](docs/architecture.md) for process, profile, timeout, and evidence
 boundaries. A requested font family is not proof of actual font resolution.
 
