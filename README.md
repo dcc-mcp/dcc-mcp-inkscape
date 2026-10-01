@@ -30,6 +30,19 @@ does not claim an embedded Python host or persistent GUI document binding.
 
 ## Start and discover
 
+After the plan-first installation commits its private profile, a new Inkscape
+instance using that profile exposes **Extensions > DCC MCP > Status, Settings,
+Connection**. These native GTK dialogs show receipt-owned settings and the
+actual lifecycle readiness result. Settings is read-only. Connection can check
+readiness or explicitly start the configured standalone adapter; it never
+starts or reconfigures a gateway. Launching a process alone is not a connected
+result. See [native menu](docs/native-menu.md) for scope and acceptance details.
+
+The typed vector-plan effect remains hidden because it requires a bounded MCP
+request. Its visibility does not determine whether the adapter is installed.
+Existing open documents are not restarted or bound to the controller by menu
+actions.
+
 Build/install the package in an operator-selected controller environment, then
 run the lifecycle in [install.md](install.md). Start one foreground service:
 

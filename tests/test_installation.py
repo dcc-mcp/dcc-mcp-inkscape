@@ -101,7 +101,8 @@ def test_install_reports_configured_artifacts_separately_from_closed_service(sco
     assert not report["verify"]["directly_usable"]
     assert report["verify"]["failure_reason"] == "not_running"
     receipt = json.loads(Path(report["receipt_path"]).read_text(encoding="utf-8"))
-    assert len(receipt["files"]) == 4
+    assert len(receipt["files"]) == len(installation.FILES) + 1
+    assert receipt["schema_version"] == 2
     assert receipt["source"]["sop_schema_artifact"] == 2
     for record in receipt["files"]:
         assert installation._digest(Path(record["path"])) == record["sha256"]

@@ -275,12 +275,23 @@ class InkscapeRuntime:
         self.profile = contained_path(self.workspace, self.state / "profile")
         extensions = contained_path(self.workspace, self.profile / "extensions")
         extensions.mkdir(parents=True, exist_ok=True)
-        resources = {
-            "dcc_mcp_vector.inx": HERE / "extension" / "dcc_mcp_vector.inx",
-            "dcc_mcp_vector.py": HERE / "extension" / "dcc_mcp_vector.py",
-            "plan.py": HERE / "plan.py",
-            "windows_process.py": HERE / "windows_process.py",
-        }
+        from dcc_mcp_inkscape.resources import EXTENSION_FILES
+
+        resources = EXTENSION_FILES
+        receipt_path = self.workspace / ".dcc-mcp-inkscape/install/receipt.json"
+        if receipt_path.exists():
+            from dcc_mcp_inkscape import installation
+
+            receipt = installation._read_json(receipt_path)
+            if receipt.get("config", {}).get("profile") == str(self.profile):
+                from dcc_mcp_inkscape.menu_bridge import load_context
+
+                if receipt.get("schema_version") != installation.RECEIPT_VERSION:
+                    raise ValueError("Private profile requires an explicit reviewed upgrade before runtime start")
+                load_context(extensions / "dcc_mcp_menu_context.json")
+                inventory = installation._artifacts(self.workspace, receipt, receipt["config"])
+                if not all(record["actual_sha256"] == record["sha256"] for record in inventory):
+                    raise ValueError("Installed private profile resources are unavailable; use the upgrade lifecycle")
         pending = []
         for filename, source in resources.items():
             target = extensions / filename

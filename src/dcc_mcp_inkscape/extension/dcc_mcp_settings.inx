@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension" translationdomain="none">
+  <name>Settings</name>
+  <id>org.dcc-mcp.menu.settings</id>
+  <param name="page" type="string" gui-hidden="true">settings</param>
+  <effect needs-document="false" needs-live-preview="false" implements-custom-gui="true">
+    <object-type>all</object-type>
+    <effects-menu><submenu name="DCC MCP"/></effects-menu>
+    <menu-tip>View the receipt-owned workspace, profile, interpreter and gateway settings.</menu-tip>
+  </effect>
+  <script><command location="inx" interpreter="python">dcc_mcp_menu.py</command></script>
+</inkscape-extension>
