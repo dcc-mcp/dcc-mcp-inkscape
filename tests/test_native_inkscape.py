@@ -543,8 +543,8 @@ def test_process_invocation_uses_fixed_argv_and_an_isolated_profile(runtime, mon
     monkeypatch.setattr(runtime_module.subprocess, "Popen", popen)
     monkeypatch.setattr(runtime_module.uuid, "uuid4", lambda: Mock(hex="0" * 32))
     result = runtime._run(["--version"], timeout=7)
-    command = popen.call_args.args[0]
-    options = popen.call_args.kwargs
+    command = popen.call_args[0][0]
+    options = popen.call_args[1]
     assert command[0] == str(runtime.executable)
     assert command[1].startswith("--app-id-tag=")
     tag = command[1].split("=", 1)[1]
@@ -942,12 +942,12 @@ def test_gui_invocation_uses_a_safe_separate_application_tag(runtime, monkeypatc
     monkeypatch.setattr(runtime_module.subprocess, "Popen", popen)
     monkeypatch.setattr(runtime_module.uuid, "uuid4", lambda: Mock(hex="0" * 32))
     runtime.document_open(str(source))
-    command = popen.call_args.args[0]
+    command = popen.call_args[0][0]
     tag = command[1].split("=", 1)[1]
     assert tag.isascii()
     assert tag[0] in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_"
     assert "--active-window" not in command
-    assert popen.call_args.kwargs["shell"] is False
+    assert popen.call_args[1]["shell"] is False
 
 
 @pytest.mark.parametrize("operation", ["document_export", "document_inspect", "document_open"])

@@ -46,10 +46,15 @@ class InkscapeServerOptions:
         for field in ("executable", "workspace", "registry_dir"):
             if not getattr(self, field):
                 raise ValueError("Explicit " + field + " configuration is required")
-            object.__setattr__(self, field, str(Path(getattr(self, field)).expanduser().resolve()))
-        object.__setattr__(self, "font_dirs", tuple(str(Path(value).resolve()) for value in self.font_dirs))
+            # Older Windows pathlib can retain a missing relative path after resolve().
+            object.__setattr__(self, field, str(Path(getattr(self, field)).expanduser().absolute().resolve()))
         object.__setattr__(
-            self, "extra_skill_paths", tuple(str(Path(value).resolve()) for value in self.extra_skill_paths)
+            self, "font_dirs", tuple(str(Path(value).expanduser().absolute().resolve()) for value in self.font_dirs)
+        )
+        object.__setattr__(
+            self,
+            "extra_skill_paths",
+            tuple(str(Path(value).expanduser().absolute().resolve()) for value in self.extra_skill_paths),
         )
 
     @classmethod

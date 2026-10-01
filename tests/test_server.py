@@ -64,10 +64,15 @@ def test_missing_explicit_scope_is_rejected_before_native_setup(options):
 
 def test_source_relative_scope_is_canonical_before_subprocess_configuration(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    options = server_module.InkscapeServerOptions("bin/inkscape.exe", "work", 19765, "registry")
+    options = server_module.InkscapeServerOptions(
+        "bin/inkscape.exe", "work", 19765, "registry", font_dirs=("fonts",), extra_skill_paths=("skills",)
+    )
     assert Path(options.workspace) == tmp_path / "work"
     assert Path(options.executable) == tmp_path / "bin" / "inkscape.exe"
     assert Path(options.registry_dir) == tmp_path / "registry"
+    assert options.font_dirs == (str(tmp_path / "fonts"),)
+    assert options.extra_skill_paths == (str(tmp_path / "skills"),)
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_constructor_uses_public_core_standalone_and_workspace_metadata(options, monkeypatch, scoped_environment):
@@ -84,7 +89,7 @@ def test_constructor_uses_public_core_standalone_and_workspace_metadata(options,
     bind = Mock()
     monkeypatch.setattr(server_module.AdapterReadinessBinder, "bind_headless", bind)
     instance = server_module.InkscapeMcpServer(options)
-    settings = core_options.call_args.kwargs
+    settings = core_options.call_args[1]
     assert settings["instance_type"] == "standalone"
     assert settings["enable_gateway_failover"] is False
     assert settings["gateway_port"] == 19765
