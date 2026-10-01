@@ -4,6 +4,7 @@ from pathlib import Path
 
 import inkex
 from menu_bridge import invoke
+from menu_bridge import publish_menu_identity
 
 
 class DccMcpMenu(inkex.InkscapeExtension):
@@ -85,6 +86,10 @@ class DccMcpMenu(inkex.InkscapeExtension):
             start.connect("clicked", start_confirmed)
             box.pack_start(start, False, False, 0)
         dialog.show_all()
+        try:
+            publish_menu_identity(context_file, self.options.page)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            inkex.errormsg("DCC MCP menu evidence failed: " + str(exc))
         update(self.options.page)
         dialog.run()
         dialog.destroy()

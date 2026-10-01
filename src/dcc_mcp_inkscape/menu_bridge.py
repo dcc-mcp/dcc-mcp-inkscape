@@ -3,7 +3,9 @@
 import hashlib
 import json
 import os
+import re
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -80,6 +82,47 @@ def environment(context):
     result["PYTHONPATH"] = context["module_root"]
     result["PYTHONDONTWRITEBYTECODE"] = "1"
     return result
+
+
+def publish_menu_identity(context_file, panel):
+    """Report this extension's own PID for a fresh bounded native-menu request."""
+    raw = os.environ.get("DCC_MCP_INKSCAPE_MENU_REQUEST")
+    if raw is None:
+        return None
+    if len(raw) > 8192:
+        raise ValueError("Native menu request exceeds its size limit")
+    request = json.loads(raw)
+    context = load_context(context_file)
+    config = context["config"]
+    if (
+        not isinstance(request, dict)
+        or panel not in ("status", "settings", "connection")
+        or request.get("panel") != panel
+        or request.get("workspace") != config["workspace"]
+        or request.get("profile") != config["profile"]
+        or not isinstance(request.get("nonce"), str)
+        or not re.fullmatch(r"[0-9a-f]{32}", request["nonce"])
+        or os.environ.get("SELF_CALL", "").lower() != "true"
+    ):
+        raise ValueError("Native menu request does not match this Inkscape-hosted profile")
+    evidence = Path(config["profile"]).parent / "evidence" / ("menu-" + request["nonce"] + ".json")
+    evidence.resolve().relative_to(Path(config["workspace"]))
+    if evidence.parent.is_symlink() or evidence.is_symlink():
+        raise ValueError("Native menu evidence must retain its owned location")
+    report = {
+        "schema_version": 1,
+        "nonce": request["nonce"],
+        "panel": panel,
+        "workspace": config["workspace"],
+        "profile": config["profile"],
+        "menu_pid": os.getpid(),
+        "menu_parent_pid": os.getppid(),
+        "menu_executable": sys.executable,
+        "self_call": True,
+    }
+    with evidence.open("x", encoding="utf-8") as stream:
+        json.dump(report, stream)
+    return report
 
 
 def invoke(context_file, operation):

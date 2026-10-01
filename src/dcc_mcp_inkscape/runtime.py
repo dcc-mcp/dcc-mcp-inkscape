@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import uuid
 from pathlib import Path
 from xml.etree import ElementTree
@@ -615,6 +616,84 @@ class InkscapeRuntime:
             "accepted": False,
             "next_step": "Observe this exact process with the official scoped ui-control service",
         }
+
+    def control_open(self, panel="status"):
+        """Open only a fixed native menu dialog in a new independent host instance."""
+        from dcc_mcp_inkscape.menu_bridge import load_context
+        from dcc_mcp_inkscape.menu_process import WindowsMenuProcess
+
+        if panel not in ("status", "settings", "connection"):
+            raise ValueError("Control panel must be status, settings, or connection")
+        load_context(self.profile / "extensions/dcc_mcp_menu_context.json")
+        nonce = uuid.uuid4().hex
+        evidence = contained_path(self.workspace, self.state / "evidence" / ("menu-" + nonce + ".json"))
+        evidence.parent.mkdir(parents=True, exist_ok=True)
+        environment = dict(self.environment)
+        environment["DCC_MCP_INKSCAPE_MENU_REQUEST"] = json.dumps(
+            {"nonce": nonce, "panel": panel, "workspace": str(self.workspace), "profile": str(self.profile)}
+        )
+        action = "org.dcc-mcp.menu." + panel
+        command = [str(self.executable), "--app-id-tag=dccmcp_control_" + nonce, "--with-gui", "--actions=" + action]
+        process = WindowsMenuProcess(command, environment, self.workspace)
+        try:
+            deadline = time.monotonic() + 20
+            identity = None
+            while time.monotonic() < deadline:
+                if evidence.is_file():
+                    if evidence.is_symlink():
+                        raise RuntimeError("Native menu identity cannot be a symbolic link")
+                    with evidence.open("rb") as stream:
+                        data = stream.read(8193)
+                    if len(data) > 8192:
+                        raise RuntimeError("Native menu identity exceeds its size limit")
+                    try:
+                        identity = json.loads(data.decode("utf-8"))
+                    except ValueError:
+                        time.sleep(0.05)
+                        continue
+                    break
+                if process.poll() is not None:
+                    raise RuntimeError("Inkscape exited before its native menu identity was published")
+                time.sleep(0.05)
+            if (
+                not isinstance(identity, dict)
+                or identity.get("nonce") != nonce
+                or identity.get("panel") != panel
+                or identity.get("profile") != str(self.profile)
+                or identity.get("workspace") != str(self.workspace)
+                or identity.get("self_call") is not True
+                or type(identity.get("menu_pid")) is not int
+                or identity["menu_pid"] <= 0
+                or type(identity.get("menu_parent_pid")) is not int
+                or identity["menu_parent_pid"] <= 0
+            ):
+                raise RuntimeError(
+                    "Inkscape did not publish the matching native menu identity; owned GUI PID "
+                    + str(process.pid)
+                    + " was retained"
+                )
+            proof = process.verify_menu(identity)
+            return {
+                "host_pid": process.pid,
+                "menu_pid": identity["menu_pid"],
+                "menu_parent_pid": identity["menu_parent_pid"],
+                "panel": panel,
+                "action_id": action,
+                "profile": str(self.profile),
+                "native_identity": identity,
+                "ownership_proof": proof,
+                "command": command,
+                "evidence_path": str(evidence),
+                "producer": "Inkscape native extension GUI",
+                "accepted": False,
+                "next_step": "Observe the exact OS-verified native menu PID with the official scoped ui-control service",
+            }
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+            raise RuntimeError(
+                str(exc) + "; newly owned Inkscape GUI PID " + str(process.pid) + " was retained"
+            ) from exc
+        finally:
+            process.close()
 
 
 def configured_runtime():

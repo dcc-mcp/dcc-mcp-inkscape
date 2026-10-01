@@ -17,6 +17,7 @@ def verify_wheel(path):
         "dcc_mcp_inkscape/installation.py",
         "dcc_mcp_inkscape/resources.py",
         "dcc_mcp_inkscape/menu.py",
+        "dcc_mcp_inkscape/menu_process.py",
         "dcc_mcp_inkscape/menu_bridge.py",
         "dcc_mcp_inkscape/extension/dcc_mcp_menu.py",
         "dcc_mcp_inkscape/extension/dcc_mcp_status.inx",
@@ -28,7 +29,14 @@ def verify_wheel(path):
     }
     required.update(
         "dcc_mcp_inkscape/skills/inkscape-vector/scripts/" + name + ".py"
-        for name in ("capabilities", "document_build", "document_export", "document_inspect", "document_open")
+        for name in (
+            "capabilities",
+            "document_build",
+            "document_export",
+            "document_inspect",
+            "document_open",
+            "control_open",
+        )
     )
     with zipfile.ZipFile(path) as wheel:
         names = set(wheel.namelist())
