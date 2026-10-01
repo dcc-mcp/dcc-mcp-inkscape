@@ -325,6 +325,36 @@ def test_saved_gradient_transform_accepts_affine_equivalence_not_literal_string_
         runtime_module.verify_document(_save_fixture(tmp_path, saved_tree), plan_module.validate_plan(radial_plan))
 
 
+def test_saved_native_six_significant_digit_matrix_is_accepted_without_accepting_an_altered_matrix(
+    tmp_path, saved_tree, radial_plan
+):
+    node = radial_plan["nodes"][0]
+    node.update(
+        gradient_units="objectBoundingBox",
+        cx=0.5,
+        cy=0.5,
+        r=0.7,
+        fx=0.45,
+        fy=0.45,
+        gradient_transform="rotate(10,.5,.5) scale(1,1.2)",
+    )
+    gradient = saved_tree.getroot().find(SVG + "defs/" + SVG + "radialGradient")
+    gradient.set("gradientUnits", "objectBoundingBox")
+    for field in ("cx", "cy", "r", "fx", "fy"):
+        gradient.set(field, str(node[field]))
+    # This exact matrix was saved by the native Inkscape objectBoundingBox smoke.
+    gradient.set("gradientTransform", "matrix(0.984808 0.173648 -0.208378 1.18177 0.0944202 -0.079228)")
+    normalized = plan_module.validate_plan(radial_plan)
+    runtime_module.verify_document(_save_fixture(tmp_path, saved_tree), normalized)
+    for altered in (
+        "matrix(0.984808 0.173649 -0.208378 1.18177 0.0944202 -0.079228)",
+        "matrix(0.984809 0.173648 -0.208378 1.18177 0.0944202 -0.079228)",
+    ):
+        gradient.set("gradientTransform", altered)
+        with pytest.raises(RuntimeError):
+            runtime_module.verify_document(_save_fixture(tmp_path, saved_tree), normalized)
+
+
 @pytest.mark.parametrize(
     "failure",
     [

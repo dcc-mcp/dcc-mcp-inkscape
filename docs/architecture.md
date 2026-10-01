@@ -79,6 +79,8 @@ checks radial coordinates, units, affine transform equivalence, and the
 ordered native stop structure after Inkscape saves the document. Coordinate
 comparisons tolerate native serialization rounding; transforms remain native
 `gradientTransform` fields, including nonuniform scaling.
+Affine comparison also accepts the exact six-significant-digit serialization
+used by native inkex transforms; it does not loosen process provenance checks.
 
 Opaque hexadecimal stop colors are compared semantically against saved
 hexadecimal or integer `rgb()` values. Named colors, `currentColor`, and
