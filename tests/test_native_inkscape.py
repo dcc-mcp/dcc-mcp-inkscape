@@ -970,6 +970,56 @@ def test_preflight_blocks_external_resources_before_every_native_entry(
     assert not (runtime.workspace / "blocked.png").exists()
 
 
+def test_retained_parent_queries_same_read_object_after_exit(monkeypatch):
+    import ctypes
+    from types import SimpleNamespace
+
+    from dcc_mcp_inkscape import windows_process
+
+    kernel = SimpleNamespace(OpenProcess=Mock(return_value=123), CloseHandle=Mock())
+    monkeypatch.setattr(ctypes, "WinDLL", Mock(return_value=kernel), raising=False)
+    ended_helper = {"pid": 42, "exit_status": 0, "exit_time": 123456}
+    query = Mock(return_value=ended_helper)
+    monkeypatch.setattr(windows_process, "query_process", query)
+    retained = windows_process.RetainedWindowsProcess(42)
+    assert retained.query() is ended_helper
+    kernel.OpenProcess.assert_called_once_with(0x1000, False, 42)
+    query.assert_called_once_with(42, retained_handle=123)
+    retained.close()
+    retained.close()
+    kernel.CloseHandle.assert_called_once_with(123)
+    with pytest.raises(RuntimeError, match="closed"):
+        retained.query()
+
+
+@pytest.mark.parametrize("pid", [True, False, 0, -1, "42", None])
+def test_retained_parent_rejects_invalid_identity_before_windows_api(monkeypatch, pid):
+    import ctypes
+
+    from dcc_mcp_inkscape import windows_process
+
+    dll = Mock(side_effect=AssertionError("Invalid identities must never reach OpenProcess"))
+    monkeypatch.setattr(ctypes, "WinDLL", dll, raising=False)
+    with pytest.raises(ValueError, match="positive"):
+        windows_process.RetainedWindowsProcess(pid)
+    dll.assert_not_called()
+
+
+def test_retained_parent_denies_unreadable_process(monkeypatch):
+    import ctypes
+    from types import SimpleNamespace
+
+    from dcc_mcp_inkscape import windows_process
+
+    kernel = SimpleNamespace(OpenProcess=Mock(return_value=0), CloseHandle=Mock())
+    monkeypatch.setattr(ctypes, "WinDLL", Mock(return_value=kernel), raising=False)
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: 87, raising=False)
+    monkeypatch.setattr(ctypes, "WinError", lambda code: OSError("unreadable " + str(code)), raising=False)
+    with pytest.raises(OSError, match="unreadable 87"):
+        windows_process.RetainedWindowsProcess(42)
+    kernel.CloseHandle.assert_not_called()
+
+
 @pytest.mark.dcc
 @pytest.mark.skipif(
     os.environ.get("DCC_MCP_INKSCAPE_LIVE_TEST") != "1" or not os.environ.get("DCC_MCP_INKSCAPE_EXE"),

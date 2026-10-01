@@ -4,14 +4,28 @@ This extension returns the edited document through inkex's normal stdout
 protocol. It never writes an SVG file; Inkscape owns committing and exporting.
 """
 
-import json
 import os
-from pathlib import Path
 
-import inkex
-from plan import GEOMETRY
-from plan import STYLE
-from plan import validate_plan
+# Capture a read-only parent handle before importing inkex/lxml. The Windows
+# GLib helper can exit during those imports; all identities are still queried
+# and strictly validated by the controller after native effect execution.
+EARLY_PARENT = None
+EARLY_PARENT_ERROR = None
+if os.name == "nt":
+    from windows_process import RetainedWindowsProcess
+
+    try:
+        EARLY_PARENT = RetainedWindowsProcess(os.getppid())
+    except OSError as exc:
+        EARLY_PARENT_ERROR = str(exc)
+
+import json  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import inkex  # noqa: E402
+from plan import GEOMETRY  # noqa: E402
+from plan import STYLE  # noqa: E402
+from plan import validate_plan  # noqa: E402
 
 
 def parent_executable(pid):
@@ -120,13 +134,21 @@ class TypedVectorPlan(inkex.EffectExtension):
             process_id = os.getpid()
             for _ in range(3):
                 try:
-                    information = query_process(process_id)
+                    information = (
+                        EARLY_PARENT.query()
+                        if EARLY_PARENT is not None and EARLY_PARENT.pid == process_id
+                        else query_process(process_id)
+                    )
                 except OSError as exc:
                     lineage.append({"requested_pid": process_id, "error": str(exc)})
                     break
                 lineage.append(information)
                 process_id = information["parent_pid"]
             report["windows_process_lineage"] = lineage
+            report["early_parent_handle_retained"] = EARLY_PARENT is not None
+            report["early_parent_handle_error"] = EARLY_PARENT_ERROR
+            if EARLY_PARENT is not None:
+                EARLY_PARENT.close()
         Path(request["evidence_path"]).write_text(json.dumps(report, indent=2), encoding="utf-8")
 
 
