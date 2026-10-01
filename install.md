@@ -64,7 +64,7 @@ The stable receipt is `<workspace>/.dcc-mcp-inkscape/install/receipt.json`;
 the adjacent `config.json` records interpreter, software, profile, registry,
 gateway, and private readiness-publication paths. The receipt records actual
 host/Core/adapter versions, import origin, the SOP v2 artifact digest, and
-SHA-256 for four enabled extension files. The selected interpreter's effect
+SHA-256 for the enabled extension files and generated menu context. The selected interpreter's effect
 bytes must match the installer package before execution.
 
 An existing unreceipted extension is never adopted or overwritten. A modified
@@ -74,7 +74,7 @@ repeat containment and ownership preflight, publish the receipt last, and
 restore the previous owned bytes if commit fails. Retrying an unchanged
 installation is idempotent.
 
-Uninstall removes only the four receipt-owned extension files and the matching
+Uninstall removes only the receipt-owned extension files/context and the matching
 installation metadata. It preserves preferences, documents, exported artwork,
 the Python package, the Inkscape program, and the rest of the profile. A running
 service in the selected scope must be stopped by its operator before changing
@@ -112,6 +112,22 @@ document binding. Use discovery, then the actual typed vector tools, to prove
 native editing/export after readiness succeeds.
 
 ## SOP and exit codes
+
+Private installation receipts now use schema **2**, separately from the shared
+Install SOP report schema. They own nine static native extension resources and
+one deterministic profile-local menu context. Existing schema-1 receipts own
+only their original four files. `status` and `verify` inspect them without
+adding menus; plan and execute `upgrade` to migrate, after stopping the exact
+controller using that scope. Unknown receipt schemas are refused. New menu
+targets must not exist without ownership, even when their bytes match the
+bundle. Failed migration restores the previous owned files and receipt.
+Uninstalling a schema-1 installation removes only its original files.
+
+`menu_resources.available` means the installed resource hashes and context
+match the selected package. `gui_observed` remains false in lifecycle reports:
+file verification cannot prove an open Inkscape instance has loaded its menus.
+Use a new instance with the selected `INKSCAPE_PROFILE_DIR` for GUI acceptance;
+do not restart an existing unsaved document. See [native menu](docs/native-menu.md).
 
 All reports use the immutable Install SOP **v2 artifact**, SHA-256
 `daa5840e07c956d7c9269e5709d6993a3988b905f986c06e7c4c02f5023e9422`.
