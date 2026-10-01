@@ -256,7 +256,10 @@ def _verify_radial_gradient(element, node):
             raise ValueError("radial units mismatch")
         expected = validate_transform(node.get("gradient_transform", ""))
         actual = validate_transform(element.get("gradientTransform", ""), maximum=float("inf"))
-        if not all(math.isclose(left, right, rel_tol=1e-6, abs_tol=1e-9) for left, right in zip(expected, actual)):
+        if not all(
+            math.isclose(left, right, rel_tol=1e-6, abs_tol=1e-9) or right == float(format(left, ".6g"))
+            for left, right in zip(expected, actual)
+        ):
             raise ValueError("radial transform mismatch")
         stops = list(element)
         if len(stops) != len(node["stops"]):
