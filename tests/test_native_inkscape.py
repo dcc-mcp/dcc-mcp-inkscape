@@ -12,6 +12,7 @@ import json
 import os
 import struct
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import Mock
 from xml.etree import ElementTree
@@ -970,7 +971,18 @@ def test_preflight_blocks_external_resources_before_every_native_entry(
     assert not (runtime.workspace / "blocked.png").exists()
 
 
-def test_retained_parent_queries_same_read_object_after_exit(monkeypatch):
+@pytest.fixture
+def mocked_windows_ctypes(monkeypatch):
+    import ctypes
+    from types import SimpleNamespace
+
+    # Mock the Windows type module as well as WinDLL on non-Windows runners.
+    wintypes = SimpleNamespace(DWORD=ctypes.c_uint32, BOOL=ctypes.c_int32, HANDLE=ctypes.c_void_p)
+    monkeypatch.setattr(ctypes, "wintypes", wintypes, raising=False)
+    monkeypatch.setitem(sys.modules, "ctypes.wintypes", wintypes)
+
+
+def test_retained_parent_queries_same_read_object_after_exit(monkeypatch, mocked_windows_ctypes):
     import ctypes
     from types import SimpleNamespace
 
@@ -993,7 +1005,7 @@ def test_retained_parent_queries_same_read_object_after_exit(monkeypatch):
 
 
 @pytest.mark.parametrize("pid", [True, False, 0, -1, "42", None])
-def test_retained_parent_rejects_invalid_identity_before_windows_api(monkeypatch, pid):
+def test_retained_parent_rejects_invalid_identity_before_windows_api(monkeypatch, mocked_windows_ctypes, pid):
     import ctypes
 
     from dcc_mcp_inkscape import windows_process
@@ -1005,7 +1017,7 @@ def test_retained_parent_rejects_invalid_identity_before_windows_api(monkeypatch
     dll.assert_not_called()
 
 
-def test_retained_parent_denies_unreadable_process(monkeypatch):
+def test_retained_parent_denies_unreadable_process(monkeypatch, mocked_windows_ctypes):
     import ctypes
     from types import SimpleNamespace
 
