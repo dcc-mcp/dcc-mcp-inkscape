@@ -100,6 +100,8 @@ class DccMcpMenu(InkscapeExtension):
                     )
                 elif not diagnostics.get("available", True):
                     lines.append("Diagnostic log unavailable: " + diagnostics.get("error", "unknown error"))
+                if report.get("diagnostic_retention_failure"):
+                    lines.append("Diagnostic log write failed: " + report["diagnostic_retention_failure"]["message"])
                 if report.get("started"):
                     lines.extend(
                         ["Started controller PID: " + str(report["owner_pid"]), "Controller log: " + report["log_file"]]

@@ -298,8 +298,10 @@ def invoke(context_file, operation):
         shell=False,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
+    stderr_retained = True
+    stderr_message = result.stderr.decode("utf-8", "replace").encode("utf-8")[:2048].decode("utf-8", "ignore")
     if result.stderr:
-        record_diagnostic(
+        stderr_retained = record_diagnostic(
             context_file,
             "controller",
             result.stderr.decode("utf-8", "replace"),
@@ -318,5 +320,15 @@ def invoke(context_file, operation):
         raise ValueError("Menu response must be an object")
     if result.returncode:
         record_diagnostic(context_file, "controller", report.get("error") or "Configured adapter command failed")
-        raise ValueError(str(report.get("error") or "Configured adapter command failed"))
+        error = str(report.get("error") or "Configured adapter command failed")
+        if not stderr_retained:
+            error += "\nDiagnostic log write failed: " + stderr_message
+        raise ValueError(error)
+    if not stderr_retained:
+        report["diagnostic_retention_failure"] = {
+            "source": "controller",
+            "severity": "warning",
+            "message": stderr_message,
+            "retention_failed": True,
+        }
     return report
