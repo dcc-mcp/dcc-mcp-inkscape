@@ -8,5 +8,9 @@
 - Native inkex effect, bounded vector plans, software-controlled exports,
   Windows/Linux invocation provenance, and atomic output publication.
 - Private extension/font configuration and shared install SOP lifecycle.
+- Explicit native Status, Settings and Connection menus with scoped controller
+  startup and a bounded native menu-opening tool.
+- Private retained menu diagnostics and an exact Windows Gdk nonfatal-message
+  handler, preserving real errors, fatal policy and readiness results.
 
 This initial source version has not been published as a release.

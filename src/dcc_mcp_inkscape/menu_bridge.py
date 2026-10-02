@@ -6,7 +6,15 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
+from datetime import datetime
+from datetime import timezone
 from pathlib import Path
+
+DIAGNOSTIC_LIMIT = 131072
+DIAGNOSTIC_EVENTS = 32
+GDK_NULL_TOOL_MESSAGE = "gdk_seat_default_remove_tool: assertion 'tool != NULL' failed"
+_GDK_HANDLERS = []
 
 
 def _bytes(path, limit):
@@ -84,6 +92,148 @@ def environment(context):
     return result
 
 
+def _diagnostic_path(context_file):
+    context = load_context(context_file)
+    config = context["config"]
+    root = Path(config["profile"]).parent
+    directory = root / "evidence"
+    path = directory / "menu-diagnostics.json"
+    path.resolve().relative_to(Path(config["workspace"]).resolve())
+    if root.is_symlink() or directory.is_symlink() or path.is_symlink():
+        raise ValueError("Menu diagnostics must retain their owned location")
+    return path
+
+
+def _diagnostic_events(path):
+    if not path.exists():
+        return []
+    value = _object(path, DIAGNOSTIC_LIMIT)
+    events = value.get("events")
+    if (
+        value.get("owner") != "dcc-mcp-inkscape-menu-diagnostics"
+        or type(value.get("schema_version")) is not int
+        or value.get("schema_version") != 1
+        or not isinstance(events, list)
+        or len(events) > DIAGNOSTIC_EVENTS
+    ):
+        raise ValueError("Menu diagnostic log is invalid")
+    for event in events:
+        if (
+            not isinstance(event, dict)
+            or set(event) != {"time_utc", "pid", "page", "source", "severity", "message"}
+            or type(event["pid"]) is not int
+            or event["pid"] <= 0
+            or event["page"] not in (None, "status", "settings", "connection")
+            or event["severity"] not in ("error", "warning", "expected_nonfatal")
+            or not isinstance(event["source"], str)
+            or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", event["source"])
+            or not isinstance(event["time_utc"], str)
+            or len(event["time_utc"]) > 40
+            or not isinstance(event["message"], str)
+            or len(event["message"].encode("utf-8")) > 2048
+        ):
+            raise ValueError("Menu diagnostic event is invalid")
+    return events
+
+
+def record_diagnostic(context_file, source, message, severity="error", page=None):
+    """Retain bounded diagnostics only in the validated installed private scope."""
+    temporary = None
+    lock = None
+    locked = False
+    try:
+        if (
+            severity not in ("error", "warning", "expected_nonfatal")
+            or page not in (None, "status", "settings", "connection")
+            or not isinstance(source, str)
+            or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", source)
+        ):
+            return False
+        path = _diagnostic_path(context_file)
+        path.parent.mkdir(exist_ok=True)
+        lock = path.with_suffix(".lock")
+        # Do not discard another process's error during concurrent menu use.
+        with lock.open("x", encoding="utf-8") as stream:
+            stream.write(str(os.getpid()))
+        locked = True
+        events = _diagnostic_events(path)
+        bounded = str(message).encode("utf-8", "replace")[:2048].decode("utf-8", "ignore")
+        events.append(
+            {
+                "time_utc": datetime.now(timezone.utc).isoformat(),
+                "pid": os.getpid(),
+                "page": page,
+                "source": source,
+                "severity": severity,
+                "message": bounded,
+            }
+        )
+        payload = json.dumps(
+            {"owner": "dcc-mcp-inkscape-menu-diagnostics", "schema_version": 1, "events": events[-DIAGNOSTIC_EVENTS:]},
+            ensure_ascii=False,
+        ).encode("utf-8")
+        if len(payload) > DIAGNOSTIC_LIMIT:
+            return False
+        with tempfile.NamedTemporaryFile(dir=str(path.parent), prefix="menu-diagnostics-", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(payload)
+        os.replace(str(temporary), str(path))
+        temporary = None
+        return True
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink()
+            except OSError:
+                pass
+        if locked:
+            try:
+                lock.unlink()
+            except OSError:
+                pass
+
+
+def diagnostic_status(context_file):
+    """Read retained diagnostics without changing readiness or creating files."""
+    path = _diagnostic_path(context_file)
+    try:
+        events = _diagnostic_events(path)
+        return {
+            "available": True,
+            "log_file": str(path),
+            "recent": events,
+            "counts": {
+                severity: sum(event["severity"] == severity for event in events)
+                for severity in ("error", "warning", "expected_nonfatal")
+            },
+        }
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return {"available": False, "log_file": str(path), "recent": [], "counts": {}, "error": str(exc)}
+
+
+def install_gdk_diagnostic_handler(glib, context_file, page):
+    """Route just the nonfatal Windows GDK NULL-tool diagnostic to its owned log."""
+    if sys.platform != "win32" or not all(
+        hasattr(glib, name) for name in ("log_set_handler", "log_default_handler", "LogLevelFlags")
+    ):
+        return None
+    critical = glib.LogLevelFlags.LEVEL_CRITICAL
+
+    def handler(domain, level, message, user_data=None):
+        known = domain == "Gdk" and int(level) == int(critical) and message == GDK_NULL_TOOL_MESSAGE
+        recorded = record_diagnostic(context_file, "glib-gdk", message, "expected_nonfatal" if known else "error", page)
+        if not (known and recorded):
+            glib.log_default_handler(domain, level, message, user_data)
+
+    # Fatal/recursion flags are deliberately not registered; their original policy stays in force.
+    identity = glib.log_set_handler("Gdk", critical, handler, None)
+    # This is a one-shot native extension process. Keep the callback through GTK destruction and late cleanup.
+    _GDK_HANDLERS.append((identity, handler))
+    return identity
+
+
 def publish_menu_identity(context_file, panel):
     """Report this extension's own PID for a fresh bounded native-menu request."""
     raw = os.environ.get("DCC_MCP_INKSCAPE_MENU_REQUEST")
@@ -148,6 +298,14 @@ def invoke(context_file, operation):
         shell=False,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
+    if result.stderr:
+        record_diagnostic(
+            context_file,
+            "controller",
+            result.stderr.decode("utf-8", "replace"),
+            "error" if result.returncode else "warning",
+            operation if operation in ("status", "settings", "connection") else "connection",
+        )
     if len(result.stdout) > 1024 * 1024:
         raise ValueError("Menu response exceeds its size limit")
     try:
@@ -159,5 +317,6 @@ def invoke(context_file, operation):
     if not isinstance(report, dict):
         raise ValueError("Menu response must be an object")
     if result.returncode:
+        record_diagnostic(context_file, "controller", report.get("error") or "Configured adapter command failed")
         raise ValueError(str(report.get("error") or "Configured adapter command failed"))
     return report
