@@ -123,6 +123,9 @@ severity counts. The visible menu also shows its latest retained diagnostic.
 The log keeps at most 32 events, limits each message to 2048 UTF-8 bytes and
 refuses invalid or oversized existing files instead of replacing them.
 Status queries do not create the log or change readiness.
+If a controller diagnostic cannot be retained, its bounded message is still
+included in the immediate response and displayed in the explicitly opened
+menu. A failed controller command preserves that message in its error result.
 
 The stderr behavior and input-device path are established by the official
 [Inkscape 1.4.4 script implementation](https://gitlab.com/inkscape/inkscape/-/blob/INKSCAPE_1_4_4/src/extension/implementation/script.cpp),

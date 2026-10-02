@@ -458,3 +458,83 @@ def test_background_start_uses_owned_log_and_no_console_without_claiming_ready(m
     assert report["startup_state"] == "starting"
     assert report["installation"]["readiness"]["ready"] is False
     assert report["installation"]["verify"]["directly_usable"] is False
+
+
+def test_successful_child_keeps_report_and_temporary_diagnostic_when_log_write_fails(menu_install, monkeypatch):
+    workspace, _, context = menu_install
+    expected = {
+        "operation": "connection",
+        "installation": {"readiness": {"status": "not_running", "ready": False}, "verify": {"directly_usable": False}},
+    }
+    stderr = "original child warning"
+    monkeypatch.setattr(menu_bridge, "record_diagnostic", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        menu_bridge.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0, stdout=json.dumps(expected).encode("utf-8"), stderr=stderr.encode("utf-8")
+        ),
+    )
+    before = file_snapshot(workspace)
+    report = menu_bridge.invoke(context, "connection")
+    assert report["operation"] == expected["operation"]
+    assert report["installation"] == expected["installation"]
+    fallback = report["diagnostic_retention_failure"]
+    assert fallback["retention_failed"] is True
+    assert fallback["source"] == "controller"
+    assert fallback["severity"] == "warning"
+    assert fallback["message"] == stderr
+    assert len(fallback["message"].encode("utf-8")) <= 2048
+    assert file_snapshot(workspace) == before
+
+
+def test_failed_child_keeps_original_error_and_bounded_stderr_when_log_write_fails(menu_install, monkeypatch):
+    context = menu_install[2]
+    original_error = "actual operation failure"
+    stderr = "original Unicode stderr: " + "汉𐍈" * 1000
+    monkeypatch.setattr(menu_bridge, "record_diagnostic", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        menu_bridge.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=10,
+            stdout=json.dumps({"error": original_error}).encode("utf-8"),
+            stderr=stderr.encode("utf-8"),
+        ),
+    )
+    with pytest.raises(ValueError) as failure:
+        menu_bridge.invoke(context, "connection")
+    error, separator, retained_stderr = str(failure.value).partition("\nDiagnostic log write failed: ")
+    assert error == original_error
+    assert separator
+    assert retained_stderr.startswith("original Unicode stderr: ")
+    assert stderr.startswith(retained_stderr)
+    assert retained_stderr != stderr
+    assert len(retained_stderr.encode("utf-8")) <= 2048
+    assert "\ufffd" not in retained_stderr
+
+
+def test_successful_child_temporary_diagnostic_bounds_unicode_when_log_write_fails(menu_install, monkeypatch):
+    context = menu_install[2]
+    expected = {"installation": {"readiness": {"status": "starting", "ready": False}}}
+    stderr = "original Unicode warning: " + "汉𐍈" * 1000
+    monkeypatch.setattr(menu_bridge, "record_diagnostic", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        menu_bridge.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0, stdout=json.dumps(expected).encode("utf-8"), stderr=stderr.encode("utf-8")
+        ),
+    )
+    report = menu_bridge.invoke(context, "connection")
+    assert report["installation"] == expected["installation"]
+    fallback = report["diagnostic_retention_failure"]
+    assert fallback["retention_failed"] is True
+    assert fallback["source"] == "controller"
+    assert fallback["severity"] == "warning"
+    retained = fallback["message"]
+    assert retained.startswith("original Unicode warning: ")
+    assert stderr.startswith(retained)
+    assert retained != stderr
+    assert len(retained.encode("utf-8")) <= 2048
+    assert "\ufffd" not in retained
