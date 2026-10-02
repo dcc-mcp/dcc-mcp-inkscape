@@ -96,5 +96,43 @@ and bundled native extension-manager example. GTK support is supplied by
 not a new controller GUI dependency. Windows 1.4.4 is the actual case host;
 Linux/macOS GUI behavior requires its own native acceptance.
 
+## Quiet operation and retained diagnostics
+
+Normal `serve` operation does not open a menu or GUI. The native dialogs open
+only on an explicit menu or `control_open` request. Controller subprocesses
+retain their output in owned logs and use `CREATE_NO_WINDOW` on Windows.
+
+Inkscape 1.4.4 displays its extension extra-output dialog for nonempty stderr,
+even when an extension succeeds. Windows GTK 3.24.51 can emit the exact Gdk
+critical message `gdk_seat_default_remove_tool: assertion 'tool != NULL' failed`
+when an input device is removed without an associated tool. The menu registers
+a process-local classic GLib handler for that domain and nonfatal critical
+level before initializing GTK. It omits this one message from stderr only
+after successfully recording it as `expected_nonfatal` in the validated private
+profile's `<state-dir>/evidence/menu-diagnostics.json`.
+
+Unknown messages and failed log writes retain GLib's default stderr behavior.
+Fatal and recursion flags are not registered; their original policy remains
+in effect. Structured GLib logging is outside this classic-handler scope.
+Native Python exceptions still propagate, and controller failures retain
+their failure result, diagnostics and real readiness state.
+
+The `menu --context-file <owned-context> --operation status` JSON result
+includes read-only `diagnostics` with the log location, recent events and
+severity counts. The visible menu also shows its latest retained diagnostic.
+The log keeps at most 32 events, limits each message to 2048 UTF-8 bytes and
+refuses invalid or oversized existing files instead of replacing them.
+Status queries do not create the log or change readiness.
+
+The stderr behavior and input-device path are established by the official
+[Inkscape 1.4.4 script implementation](https://gitlab.com/inkscape/inkscape/-/blob/INKSCAPE_1_4_4/src/extension/implementation/script.cpp),
+[GTK 3.24.51 Windows device manager](https://github.com/GNOME/gtk/blob/3.24.51/gdk/win32/gdkdevicemanager-win32.c)
+and [Gdk seat implementation](https://github.com/GNOME/gtk/blob/3.24.51/gdk/gdkseatdefault.c).
+Handler scope follows GLib's
+[classic log-handler contract](https://docs.gtk.org/glib/func.log_set_handler.html).
+This identifies a possible diagnostic source, not the exact device event on
+the reporting user's PC. Controlled GLib dispatch checks do not establish a
+naturally reproduced input-device event or visual popup acceptance.
+
 The no-document argument behavior is established by the official
 [Inkscape 1.4.4 script implementation](https://gitlab.com/inkscape/inkscape/-/blob/INKSCAPE_1_4_4/src/extension/implementation/script.cpp).

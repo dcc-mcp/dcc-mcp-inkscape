@@ -12,8 +12,10 @@ import uuid
 from pathlib import Path
 
 from dcc_mcp_inkscape import installation
+from dcc_mcp_inkscape.menu_bridge import diagnostic_status
 from dcc_mcp_inkscape.menu_bridge import environment
 from dcc_mcp_inkscape.menu_bridge import load_context
+from dcc_mcp_inkscape.menu_bridge import record_diagnostic
 
 
 def _arguments(config):
@@ -116,6 +118,7 @@ def operate(context_file, operation):
         "operation": operation,
         "configuration": config,
         "installation": status,
+        "diagnostics": diagnostic_status(context_file),
         "message": "Live readiness and installed menu resources are checked independently.",
     }
     if operation == "settings":
@@ -171,6 +174,7 @@ def run_menu_command(args):
         report = operate(args.context_file, args.operation)
         code = 0
     except (OSError, ValueError, KeyError, TypeError, RuntimeError, ImportError, subprocess.SubprocessError) as exc:
+        record_diagnostic(args.context_file, "controller", str(exc))
         report = {
             "operation": args.operation,
             "error": str(exc),

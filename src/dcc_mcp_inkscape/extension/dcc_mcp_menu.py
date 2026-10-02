@@ -4,8 +4,10 @@ from pathlib import Path
 
 import inkex
 from inkex.base import InkscapeExtension
+from menu_bridge import install_gdk_diagnostic_handler
 from menu_bridge import invoke
 from menu_bridge import publish_menu_identity
+from menu_bridge import record_diagnostic
 
 
 class DccMcpMenu(InkscapeExtension):
@@ -21,13 +23,23 @@ class DccMcpMenu(InkscapeExtension):
         pass
 
     def effect(self):
+        context_file = Path(__file__).resolve().with_name("dcc_mcp_menu_context.json")
+        try:
+            self._effect(context_file)
+        except Exception as exc:
+            record_diagnostic(context_file, "native-menu", str(exc), page=self.options.page)
+            raise
+
+    def _effect(self, context_file):
         # GTK is the interface toolkit shipped with Inkscape; no external UI package is installed.
         import gi
 
         gi.require_version("Gtk", "3.0")
+        from gi.repository import GLib
+
+        install_gdk_diagnostic_handler(GLib, context_file, self.options.page)
         from gi.repository import Gtk
 
-        context_file = Path(__file__).resolve().with_name("dcc_mcp_menu_context.json")
         dialog = Gtk.Dialog(title="DCC MCP — " + self.options.page.title())
         dialog.set_default_size(720, 480)
         dialog.add_button("Close", Gtk.ResponseType.CLOSE)
@@ -76,12 +88,25 @@ class DccMcpMenu(InkscapeExtension):
                     "Directly usable: " + str(status.get("verify", {}).get("directly_usable", False)),
                 ]
                 lines.extend(key + ": " + display_value(key, value, config) for key, value in config.items())
+                diagnostics = report.get("diagnostics", {})
+                if diagnostics.get("recent"):
+                    last = diagnostics["recent"][-1]
+                    lines.extend(
+                        [
+                            "",
+                            "Recent diagnostic: " + last["message"],
+                            "Diagnostic log: " + display_value("profile", diagnostics["log_file"], config),
+                        ]
+                    )
+                elif not diagnostics.get("available", True):
+                    lines.append("Diagnostic log unavailable: " + diagnostics.get("error", "unknown error"))
                 if report.get("started"):
                     lines.extend(
                         ["Started controller PID: " + str(report["owner_pid"]), "Controller log: " + report["log_file"]]
                     )
                 text.get_buffer().set_text("\n".join(lines))
             except Exception as exc:
+                record_diagnostic(context_file, "native-menu", str(exc), page=self.options.page)
                 text.get_buffer().set_text("DCC MCP is not ready: " + str(exc))
 
         refresh = Gtk.Button(label="Refresh status" if self.options.page != "connection" else "Check connection")
@@ -113,6 +138,7 @@ class DccMcpMenu(InkscapeExtension):
         try:
             publish_menu_identity(context_file, self.options.page)
         except (OSError, ValueError, KeyError, TypeError) as exc:
+            record_diagnostic(context_file, "native-menu", str(exc), page=self.options.page)
             inkex.errormsg("DCC MCP menu evidence failed: " + str(exc))
         update(self.options.page)
         dialog.run()
