@@ -1192,7 +1192,7 @@
       {
         "type": "path",
         "id": "route-a-halo",
-        "d": "M239 829 V371 H541 V511 H692 V689 H843 V477 H994 V583 L915 644 V746 L873 783 H758 L699 845 H541 V795 H239 V829",
+        "d": "M239 829 V371 H541 V477 L566 502 H692 V689 H843 V477 H994 V583 L915 644 V746 L873 783 H758 L699 845 H541 V795 H239 V829",
         "fill": "none",
         "stroke": "#101e31",
         "stroke_width": 22,
@@ -1203,7 +1203,7 @@
       {
         "type": "path",
         "id": "route-a",
-        "d": "M239 829 V371 H541 V511 H692 V689 H843 V477 H994 V583 L915 644 V746 L873 783 H758 L699 845 H541 V795 H239 V829",
+        "d": "M239 829 V371 H541 V477 L566 502 H692 V689 H843 V477 H994 V583 L915 644 V746 L873 783 H758 L699 845 H541 V795 H239 V829",
         "fill": "none",
         "stroke": "#f6bf71",
         "stroke_width": 10,
@@ -1368,8 +1368,20 @@
       {
         "type": "text",
         "id": "place-name-04",
-        "text": "Reading garden",
-        "x": 443,
+        "text": "Reading",
+        "x": 435,
+        "y": 428,
+        "font_size": 14,
+        "font_family": "DejaVu Sans",
+        "font_weight": 700,
+        "fill": "#f0eadb",
+        "parent": "labels"
+      },
+      {
+        "type": "text",
+        "id": "place-name-04-line2",
+        "text": "garden",
+        "x": 435,
         "y": 446,
         "font_size": 14,
         "font_family": "DejaVu Sans",
