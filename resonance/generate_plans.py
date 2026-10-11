@@ -65,7 +65,7 @@ def make(index, title, subtitle, bg, fg, accent, secondary):
     text('scale-b','NORMALIZED / SCHEMATIC',480,1022,12,parent='annotations',text_anchor='middle',letter_spacing=2)
     text('scale-c','1',880,1022,12,parent='annotations',text_anchor='end')
     n('layer','type',label='05 / Editorial typography')
-    text('brand','RESONANCE ATLAS',64,66,15,parent='type',letter_spacing=4)
+    text('brand','RESONANCE ATLAS',64,66,15,parent='paper',letter_spacing=4)
     text('edition','VECTOR STUDIES / 2026',896,66,13,parent='type',text_anchor='end',letter_spacing=1)
     text('number',f'0{index}',64,166,54,parent='type',font_weight='bold',opacity=.4)
     text('title',title,64,252,70,parent='type',font_weight='bold',letter_spacing=-3)
