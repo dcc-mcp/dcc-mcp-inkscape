@@ -108,7 +108,10 @@ def test_real_kernel_pipes_bind_only_to_the_owned_host():
 
 @pytest.mark.parametrize("failure", ["proxy-script", "wrong-interpreter", "empty-command"])
 def test_effect_program_binding_rejects_proxy_or_interpreter(failure):
-    identity = {"command": ["python3", "/private/dcc_mcp_vector.py", "input.svg"], "executable": "/usr/bin/python3"}
+    identity = {
+        "command": ["python3", str(Path("/private/dcc_mcp_vector.py").resolve()), "input.svg"],
+        "executable": "/usr/bin/python3",
+    }
     if failure == "proxy-script":
         identity["command"][1] = "/private/proxy.py"
     elif failure == "wrong-interpreter":
@@ -120,7 +123,10 @@ def test_effect_program_binding_rejects_proxy_or_interpreter(failure):
 
 
 def test_effect_program_binding_accepts_exact_private_script():
-    identity = {"command": ["python3", "/private/dcc_mcp_vector.py", "input.svg"], "executable": "/usr/bin/python3"}
+    identity = {
+        "command": ["python3", str(Path("/private/dcc_mcp_vector.py").resolve()), "input.svg"],
+        "executable": "/usr/bin/python3",
+    }
     lp.verify_effect_program(identity, "/private/dcc_mcp_vector.py", "/usr/bin/python3")
 
 
