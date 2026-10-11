@@ -1,6 +1,6 @@
 # Night Atlas regression artwork
 
-The original Night Atlas map and folding-guide vector plans in this directory
+The original Night Atlas map, folding-guide and venue-sign vector plans in this directory
 retain the original contributor's rights. They are excluded from the adapter's
 MIT license. No CC0, public-domain, or broad artwork reuse license is granted.
 Their inclusion is authorized for this repository's real-software regression

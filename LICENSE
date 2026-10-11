@@ -22,7 +22,7 @@ SOFTWARE.
 
 Night Atlas artwork exclusion
 
-The original map and folding-guide plans in tests/fixtures/night_atlas/ are
+The original map, folding-guide and venue-sign plans in tests/fixtures/night_atlas/ are
 excluded from the MIT grant above. They retain the original contributor's
 rights. See tests/fixtures/night_atlas/LICENSES.md. The adapter code and
 regression harness remain under the MIT license.
