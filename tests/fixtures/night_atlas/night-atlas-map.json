@@ -1192,7 +1192,7 @@
       {
         "type": "path",
         "id": "route-a-halo",
-        "d": "M239 829 V371 H692 V689 H843 V477 H994 V583 L915 644 V746 L873 783 H758 L699 845 H541 V795 H239",
+        "d": "M239 829 V371 H541 V511 H692 V689 H843 V477 H994 V583 L915 644 V746 L873 783 H758 L699 845 H541 V795 H239 V829",
         "fill": "none",
         "stroke": "#101e31",
         "stroke_width": 22,
@@ -1203,7 +1203,7 @@
       {
         "type": "path",
         "id": "route-a",
-        "d": "M239 829 V371 H692 V689 H843 V477 H994 V583 L915 644 V746 L873 783 H758 L699 845 H541 V795 H239",
+        "d": "M239 829 V371 H541 V511 H692 V689 H843 V477 H994 V583 L915 644 V746 L873 783 H758 L699 845 H541 V795 H239 V829",
         "fill": "none",
         "stroke": "#f6bf71",
         "stroke_width": 10,
@@ -1370,7 +1370,7 @@
         "id": "place-name-04",
         "text": "Reading garden",
         "x": 443,
-        "y": 463,
+        "y": 446,
         "font_size": 14,
         "font_family": "DejaVu Sans",
         "font_weight": 700,
