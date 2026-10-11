@@ -113,7 +113,7 @@ def verify_windows_helper(evidence, host_pid, executable, host_process):
         raise RuntimeError("Windows spawn chain lifetimes do not match this native invocation")
 
 
-def verify_evidence(evidence, nonce, host_pid, executable, host_process=None):
+def verify_evidence(evidence, nonce, host_pid, executable, host_process=None, linux_binding=None):
     """Do not accept a standalone extension run as native host execution."""
     if not isinstance(evidence, dict) or evidence.get("nonce") != nonce or evidence.get("self_call") != "true":
         raise RuntimeError("Native effect evidence has invalid invocation correlation")
@@ -122,6 +122,11 @@ def verify_evidence(evidence, nonce, host_pid, executable, host_process=None):
             raise RuntimeError("Native effect evidence has invalid process identity")
     if evidence.get("extension_pid") == host_pid:
         raise RuntimeError("The effect was not executed by this Inkscape process")
+    if linux_binding is not None:
+        from dcc_mcp_inkscape.linux_process import verify_pipe_binding
+
+        verify_pipe_binding(evidence, host_pid, executable, linux_binding)
+        return "linux-kernel-pipes"
     if evidence.get("parent_pid") != host_pid:
         verify_windows_helper(evidence, host_pid, executable, host_process)
         return "windows-glib-helper"
@@ -411,6 +416,28 @@ class InkscapeRuntime:
                 shell=False,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
+        pipe_observer = None
+        if native_provenance and native_process is None and sys.platform.startswith("linux"):
+            from dcc_mcp_inkscape.linux_process import LinuxPipeObserver
+
+            request_path = Path((environment or self.environment)["DCC_MCP_INKSCAPE_REQUEST"])
+            request = json.loads(request_path.read_text(encoding="utf-8"))
+            try:
+                interpreter = shutil.which("python3", path=(environment or self.environment).get("PATH"))
+                if interpreter is None:
+                    raise RuntimeError("Linux native effect requires an explicit PATH python3 interpreter")
+                pipe_observer = LinuxPipeObserver(
+                    process,
+                    self.executable,
+                    request_path.parent,
+                    request["nonce"],
+                    self.profile / "extensions/dcc_mcp_vector.py",
+                    interpreter,
+                )
+            except (OSError, ValueError, RuntimeError):
+                process.kill()
+                process.communicate()
+                raise
         timed_out = False
         try:
             stdout, stderr = process.communicate(timeout=timeout)
@@ -420,6 +447,7 @@ class InkscapeRuntime:
             stdout, stderr = process.communicate()
         finally:
             observed_helpers = native_process.finish() if native_process is not None else None
+            linux_binding = pipe_observer.finish() if pipe_observer is not None else None
         result = {
             "host_pid": process.pid,
             "returncode": process.returncode,
@@ -431,6 +459,7 @@ class InkscapeRuntime:
             "timed_out": timed_out,
             "owned_host_process": host_process,
             "observed_windows_helpers": observed_helpers,
+            "linux_pipe_binding": linux_binding,
         }
         if host_report is not None:
             report = contained_path(self.workspace, host_report)
@@ -467,7 +496,7 @@ class InkscapeRuntime:
     def _invocation(self):
         nonce = uuid.uuid4().hex
         directory = self.state / "invocations" / nonce
-        directory.mkdir(parents=True)
+        directory.mkdir(parents=True, mode=0o700)
         return nonce, directory
 
     def _commit(self, temporary, output, invocation, evidence=None):
@@ -526,7 +555,12 @@ class InkscapeRuntime:
             raise RuntimeError("Inkscape did not execute the native extension; no effect evidence")
         evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
         evidence["provenance_mode"] = verify_evidence(
-            evidence, nonce, invocation["host_pid"], self.executable, invocation.get("owned_host_process")
+            evidence,
+            nonce,
+            invocation["host_pid"],
+            self.executable,
+            invocation.get("owned_host_process"),
+            invocation.get("linux_pipe_binding"),
         )
         if evidence["provenance_mode"] == "windows-glib-helper":
             observation = invocation.get("observed_windows_helpers")

@@ -40,7 +40,21 @@ and registry must be selected explicitly; gateway failover is disabled.
 ## Provenance
 
 Builds correlate a fresh nonce, `SELF_CALL=true`, object count, actual host PID,
-and native effect process identity. Linux requires a direct Inkscape parent.
+and native effect process identity. Linux GLib can double-fork the effect and
+reparent it to init, so direct ancestry is not assumed. Before importing inkex,
+the effect performs a bounded rendezvous that keeps its native stdout/stderr
+pipes open. The controller independently observes both pipe inodes and access
+modes in the exact owned Inkscape process and effect through read-only procfs.
+Host and effect PID/start ticks, executable and command line are checked around
+that observation. The effect must run the unchanged private extension through
+the operator PATH's `python3`; other interpreter configurations fail closed.
+Both descriptors are reread to detect replacement. Only then does the
+controller release that effect. Missing/changed/exited identities, unreadable
+procfs, unrelated or redirected programs, mismatched pipes, and timeouts reject
+publication. No PID-1 read, ptrace, process injection, or system setting is used.
+This establishes an observed local native communication channel, not a complete
+process-birth tree or authentication against an adversary controlling the same
+OS user. The nonce correlates the rendezvous; it is not the ownership proof.
 Windows x64 accepts only the bundled Python -> bundled GLib helper -> owned
 Inkscape chain with exact native image directories, matching PIDs, and ordered
 creation/exit times. The ancestor image and creation time must match the

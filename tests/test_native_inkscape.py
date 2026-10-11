@@ -1166,7 +1166,12 @@ def test_opted_in_native_host_build_reopen_and_png_export(tmp_path, vector_plan)
     built = runtime.document_build("editable.svg", vector_plan)
     evidence = built["native_effect"]
     assert evidence["object_count"] == 3
-    if evidence["provenance_mode"] == "direct-parent":
+    if evidence["provenance_mode"] == "linux-kernel-pipes":
+        binding = built["host_invocation"]["linux_pipe_binding"]
+        assert binding["host"]["pid"] == built["host_invocation"]["host_pid"]
+        assert binding["effect"]["pid"] == evidence["extension_pid"]
+        assert set(binding["effect_fds"].values()) == set(binding["host_fds"].values())
+    elif evidence["provenance_mode"] == "direct-parent":
         assert evidence["parent_pid"] == built["host_invocation"]["host_pid"]
         assert Path(evidence["parent_executable"]).resolve() == runtime.executable
     else:

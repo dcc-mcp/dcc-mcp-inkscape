@@ -5,6 +5,38 @@ protocol. It never writes an SVG file; Inkscape owns committing and exporting.
 """
 
 import os
+import sys
+
+
+def linux_native_rendezvous():
+    """Keep native communication pipes alive for independent kernel inspection."""
+    import json
+    import time
+    from pathlib import Path
+
+    request_file = os.environ.get("DCC_MCP_INKSCAPE_REQUEST")
+    if not request_file:
+        raise RuntimeError("Native Linux effect has no bounded request")
+    request_path = Path(request_file)
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    value = {"nonce": request["nonce"], "effect_pid": os.getpid()}
+    target = request_path.parent / "linux-binding-request.json"
+    temporary = target.with_suffix(".tmp")
+    temporary.write_text(json.dumps(value), encoding="utf-8")
+    os.replace(str(temporary), str(target))
+    ack = request_path.parent / "linux-binding-ack.json"
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if ack.is_file():
+            if json.loads(ack.read_text(encoding="utf-8")) != value:
+                raise RuntimeError("Native Linux pipe acknowledgement does not match")
+            return
+        time.sleep(0.01)
+    raise RuntimeError("Native Linux effect pipe ownership was not verified")
+
+
+if sys.platform.startswith("linux"):
+    linux_native_rendezvous()
 
 # Capture a read-only parent handle before importing inkex/lxml. The Windows
 # GLib helper can exit during those imports; all identities are still queried
@@ -114,7 +146,11 @@ class TypedVectorPlan(inkex.EffectExtension):
             elements[node["id"]] = element
         parent_probe_error = None
         try:
-            parent_image = parent_executable(os.getppid())
+            if sys.platform.startswith("linux"):
+                parent_image = None
+                parent_probe_error = "Linux ownership uses independently observed native communication pipes"
+            else:
+                parent_image = parent_executable(os.getppid())
         except (inkex.AbortExtension, OSError) as exc:
             parent_image = None
             parent_probe_error = str(exc)
