@@ -13,6 +13,7 @@ def verify_wheel(path):
         "dcc_mcp_inkscape/plan.py",
         "dcc_mcp_inkscape/windows_process.py",
         "dcc_mcp_inkscape/runtime.py",
+        "dcc_mcp_inkscape/linux_process.py",
         "dcc_mcp_inkscape/server.py",
         "dcc_mcp_inkscape/installation.py",
         "dcc_mcp_inkscape/resources.py",
