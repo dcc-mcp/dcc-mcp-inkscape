@@ -401,6 +401,17 @@ class InkscapeRuntime:
 
     def _run(self, arguments, environment=None, timeout=120, host_report=None, native_provenance=False):
         command = [str(self.executable), "--app-id-tag=dccmcp_" + uuid.uuid4().hex, *arguments]
+        request_path = None
+        request = None
+        if native_provenance and os.name != "nt" and sys.platform.startswith("linux"):
+            request_path = contained_path(
+                self.workspace, (environment or self.environment)["DCC_MCP_INKSCAPE_REQUEST"], existing=True
+            )
+            request = json.loads(request_path.read_text(encoding="utf-8"))
+            if not isinstance(request, dict) or not isinstance(request.get("nonce"), str):
+                raise ValueError("Linux native request requires a nonce object before host launch")
+            if not re.fullmatch(r"[0-9a-f]{32}", request["nonce"]):
+                raise ValueError("Linux native request nonce must be an invocation UUID")
         host_process = None
         native_process = None
         if native_provenance and os.name == "nt":
@@ -420,8 +431,6 @@ class InkscapeRuntime:
         if native_provenance and native_process is None and sys.platform.startswith("linux"):
             from dcc_mcp_inkscape.linux_process import LinuxPipeObserver
 
-            request_path = Path((environment or self.environment)["DCC_MCP_INKSCAPE_REQUEST"])
-            request = json.loads(request_path.read_text(encoding="utf-8"))
             try:
                 interpreter = shutil.which("python3", path=(environment or self.environment).get("PATH"))
                 if interpreter is None:
