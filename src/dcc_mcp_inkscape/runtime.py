@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -490,6 +491,18 @@ class InkscapeRuntime:
         report["evidence_path"] = str(report_path)
         return report
 
+    def _build_arguments(self, actions):
+        """Linux 1.4 registers extension actions only on a GTK application."""
+        arguments = ["--actions=" + actions]
+        if sys.platform.startswith("linux"):
+            if not (self.environment.get("DISPLAY") or self.environment.get("WAYLAND_DISPLAY")):
+                raise RuntimeError(
+                    "Native Inkscape vector creation on Linux requires an available display "
+                    "(for example an operator-owned Xvfb); exports and inspection remain headless"
+                )
+            arguments = ["--with-gui", "--batch-process"] + arguments
+        return arguments
+
     def document_build(self, output_file, plan):
         """Build native layers and vector objects through an Inkscape effect."""
         plan = validate_plan(plan)
@@ -504,7 +517,7 @@ class InkscapeRuntime:
         environment = dict(self.environment, DCC_MCP_INKSCAPE_REQUEST=str(request_path))
         actions = f"file-new:;{ACTION};export-type:svg;export-filename:{safe_action_value(temporary)};export-do"
         invocation = self._run(
-            ["--actions=" + actions],
+            self._build_arguments(actions),
             environment=environment,
             host_report=directory / "host.json",
             native_provenance=True,

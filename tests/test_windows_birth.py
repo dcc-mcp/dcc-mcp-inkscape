@@ -373,6 +373,7 @@ def test_runtime_uses_owned_birth_collector_for_a_native_windows_invocation(chai
 @pytest.mark.parametrize("failure", [None, "missing-birth", "captured-mismatch", "collector-error"])
 def test_document_publication_requires_the_captured_complete_owned_tree(chain, tmp_path, monkeypatch, failure):
     runtime = runtime_module.InkscapeRuntime(chain.executable, tmp_path)
+    monkeypatch.setattr(runtime_module.sys, "platform", "win32")
     plan = {"width": 64, "height": 64, "nodes": [{"type": "path", "id": "shape", "d": "M0,0 L64,64"}]}
 
     def native_fixture(arguments, environment=None, timeout=120, host_report=None, native_provenance=False):

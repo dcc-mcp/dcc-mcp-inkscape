@@ -19,6 +19,10 @@ discovery does not itself install or start a usable adapter. See
 - Inkscape 1.4 with its bundled Python/inkex runtime; Windows x64 portable 1.4.4
   has been used for the native pipeline proof. Do not install inkex into the
   controller as a substitute for the real software.
+- Linux native vector creation requires an operator-provided X11/Wayland display
+  (CI may use Xvfb). Inkscape 1.4 registers extension actions only on its GTK
+  application, so builds use an owned `--with-gui --batch-process` process.
+  Export and geometry inspection remain headless; no display is started by the adapter.
 - An explicit executable, writable workspace, private profile, registry, and
   selected local gateway. Linux direct-parent provenance is implemented;
   macOS execution is not validated. No binaries or fonts are bundled.
