@@ -8,7 +8,9 @@ import pytest
 from dcc_mcp_inkscape.plan import validate_plan
 
 
-@pytest.mark.parametrize("name, expected", [("night-atlas-map", 188), ("night-atlas-fold", 83)])
+@pytest.mark.parametrize(
+    "name, expected", [("night-atlas-map", 188), ("night-atlas-fold", 83), ("night-atlas-signs", 45)]
+)
 def test_night_atlas_regression_plan(name, expected):
     path = Path(__file__).parent / "fixtures" / "night_atlas" / (name + ".json")
     payload = json.loads(path.read_text())
