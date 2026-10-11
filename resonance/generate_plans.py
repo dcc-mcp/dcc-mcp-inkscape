@@ -79,5 +79,5 @@ for i, args in enumerate(palette,1):
     for stage,layers in [('01',{'paper','grid'}),('02',{'paper','grid','signal'}),('03',{'paper','grid','signal','annotations','type'})]:
         selected=[n for n in nodes if n['id'] in layers or n.get('parent') in layers]
         label=f'resonance-{i}-{stage}'
-        (OUT/(label+'.json')).write_text(json.dumps({'output_file':'artwork/'+label+'.svg','plan':{'width':W,'height':H,'nodes':selected}},indent=2))
+        (OUT/(label+'.json')).write_text(json.dumps({'output_file':'artwork/'+label+'.svg','plan':{'canvas':{'width':W,'height':H},'nodes':selected}},indent=2))
 print('Created 9 typed plans; no SVG written.')
