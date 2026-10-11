@@ -28,11 +28,12 @@ def process_identity(pid):
 
     start = lifetime()
     executable = os.readlink(str(root / "exe"))
+    cwd = os.readlink(str(root / "cwd"))
     command = (root / "cmdline").read_bytes().rstrip(b"\0").split(b"\0")
     command = [item.decode("utf-8", errors="strict") for item in command]
     if executable.endswith(" (deleted)") or lifetime() != start:
         raise RuntimeError("Linux native process identity changed")
-    return {"pid": pid, "start_ticks": start, "executable": executable, "command": command}
+    return {"pid": pid, "start_ticks": start, "executable": executable, "command": command, "cwd": cwd}
 
 
 def pipe_descriptor(pid, fd, expected_mode):
@@ -88,7 +89,14 @@ def correlate_pipes(host_identity, effect_pid):
 def verify_effect_program(identity, script, interpreter):
     """Reject redirected/proxy programs even if they inherited matching pipes."""
     command = identity.get("command", [])
-    if len(command) < 2 or Path(command[1]).resolve() != Path(script).resolve():
+    if len(command) < 2:
+        raise RuntimeError("Linux native effect is not running the configured private extension")
+    observed_script = Path(command[1])
+    if not observed_script.is_absolute():
+        if not identity.get("cwd"):
+            raise RuntimeError("Linux native effect has no observed working directory")
+        observed_script = Path(identity["cwd"]) / observed_script
+    if observed_script.resolve() != Path(script).resolve():
         raise RuntimeError("Linux native effect is not running the configured private extension")
     if Path(identity["executable"]).resolve() != Path(interpreter).resolve():
         raise RuntimeError("Linux native effect interpreter is not the configured PATH Python")

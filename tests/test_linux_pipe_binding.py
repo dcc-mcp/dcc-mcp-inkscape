@@ -68,6 +68,8 @@ def test_correlation_rejects_invalid_process_lifetimes(binding, monkeypatch, fai
 
 @pytest.mark.parametrize("failure", ["fd-replacement", "wrong-mode", "not-pipe"])
 def test_descriptor_checks_reject_replacement_or_nonpipe(tmp_path, monkeypatch, failure):
+    # The mocked descriptors use Linux fcntl bits even on Windows test runners.
+    monkeypatch.setattr(lp.os, "O_ACCMODE", 3, raising=False)
     targets = ["pipe:[50]", "pipe:[51]"] if failure == "fd-replacement" else ["pipe:[50]"]
     if failure == "not-pipe":
         targets = ["/ordinary/file"]
@@ -244,3 +246,13 @@ def test_successful_rendezvous_publishes_ack_and_retains_binding(tmp_path, monke
     assert "error" not in observer.finish()
     assert observer.result["effect"]["pid"] == 200
     assert (tmp_path / "linux-binding-ack.json").is_file()
+
+
+@pytest.mark.parametrize("cwd", ["/private", "/unrelated", None])
+def test_relative_script_requires_exact_kernel_observed_cwd(cwd):
+    identity = {"command": ["python3", "dcc_mcp_vector.py", "input.svg"], "executable": "/usr/bin/python3", "cwd": cwd}
+    if cwd == "/private":
+        lp.verify_effect_program(identity, "/private/dcc_mcp_vector.py", "/usr/bin/python3")
+    else:
+        with pytest.raises(RuntimeError):
+            lp.verify_effect_program(identity, "/private/dcc_mcp_vector.py", "/usr/bin/python3")
