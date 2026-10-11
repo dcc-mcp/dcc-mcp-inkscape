@@ -38,3 +38,34 @@ jobs:
       - run: python -m pip install build
       - run: python -m build
       - run: python tools/verify_wheel.py dist
+
+  linux-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install official stable Inkscape and owned test display
+        run: |
+          sudo add-apt-repository --yes ppa:inkscape.dev/stable
+          sudo apt-get update
+          sudo apt-get install --yes inkscape xvfb python3-lxml python3-cssselect python3-tinycss2 python3-numpy
+          inkscape --version
+      - run: python -m pip install -e '.[dev]'
+      - name: Native build, save, reopen and transparent PNG proof
+        env:
+          DCC_MCP_INKSCAPE_LIVE_TEST: '1'
+          DCC_MCP_INKSCAPE_EXE: /usr/bin/inkscape
+        run: |
+          controller_python="$(command -v python)"
+          PATH="/usr/bin:$PATH" xvfb-run -a "$controller_python" -m pytest tests/test_native_inkscape.py -q -m dcc --basetemp=native-evidence
+      - name: Preserve native invocation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-native-evidence
+          path: native-evidence
+          include-hidden-files: true
+          retention-days: 7

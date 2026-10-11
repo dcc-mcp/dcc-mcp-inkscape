@@ -535,7 +535,9 @@ def runtime(tmp_path):
     executable = tmp_path / "bin" / "inkscape.exe"
     executable.parent.mkdir()
     executable.write_bytes(b"test double - never executed")
-    return runtime_module.InkscapeRuntime(executable, tmp_path / "workspace")
+    runtime = runtime_module.InkscapeRuntime(executable, tmp_path / "workspace")
+    runtime.environment["DISPLAY"] = ":test-double-not-contacted"
+    return runtime
 
 
 def test_process_invocation_uses_fixed_argv_and_an_isolated_profile(runtime, monkeypatch):
