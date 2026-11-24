@@ -1,0 +1,49 @@
+name: Resonance native review
+on:
+  pull_request:
+    paths: ['resonance/**', '.github/workflows/resonance-native.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-artifact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: dcc-mcp/dcc-mcp-inkscape
+          ref: 498982ae7d4eedefeff31811c251795f5ff93be6
+          path: native-adapter
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install official software and isolated native adapter
+        run: |
+          sudo add-apt-repository --yes ppa:inkscape.dev/stable
+          sudo apt-get update
+          sudo apt-get install --yes inkscape xvfb python3-lxml python3-cssselect python3-tinycss2 python3-numpy poppler-utils fonts-dejavu-core adwaita-icon-theme-full librsvg2-common ffmpeg
+          python -m pip install ./native-adapter dcc-mcp-cli==0.20.42 Pillow
+      - name: Generate typed plans and run native gateway
+        run: |
+          python resonance/generate_plans.py
+          export XDG_CONFIG_HOME="$RUNNER_TEMP/resonance-config"
+          mkdir -p "$XDG_CONFIG_HOME/gtk-3.0"
+          printf '[Settings]\ngtk-icon-theme-name=Adwaita\ngtk-theme-name=Adwaita\n' > "$XDG_CONFIG_HOME/gtk-3.0/settings.ini"
+          controller_python="$(command -v python)"
+          PATH="/usr/bin:$PATH" xvfb-run -a "$controller_python" native-adapter/tools/native_vector_regression.py --plans resonance/plans --output "$RUNNER_TEMP/resonance-review"
+      - name: Produce low-resolution review film from actual software exports
+        run: python resonance/compose_video.py "$RUNNER_TEMP/resonance-review" --width 960
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resonance-native-review
+          path: |
+            ${{ runner.temp }}/resonance-review/artwork
+            ${{ runner.temp }}/resonance-review/evidence
+            ${{ runner.temp }}/resonance-review/frame-*.png
+            ${{ runner.temp }}/resonance-review/*.mp4
+            ${{ runner.temp }}/resonance-review/*probe.json
+          include-hidden-files: true
+          retention-days: 7
